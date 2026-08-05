@@ -1,0 +1,11 @@
+# French basics — tab separated. Lines starting with # are ignored.
+bonjour	hello
+merci	thank you
+au revoir	goodbye
+s'il vous plaît	please
+le chien	the dog
+le chat	the cat
+la maison	the house
+l'eau	the water
+le pain	the bread
+la pomme	the apple

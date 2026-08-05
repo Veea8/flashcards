@@ -1,0 +1,34 @@
+@import 'tailwindcss';
+
+/*
+ * Chrome and ink come from the validated reference palette so the app and the
+ * dashboard charts read as one system. Series colors live in lib/vizColors.ts.
+ */
+@theme {
+  --color-ink-50: #f9f9f7; /* page plane, light */
+  --color-ink-100: #f0efec; /* washes, hovers */
+  --color-ink-200: #e1e0d9; /* hairline borders, gridlines */
+  --color-ink-400: #898781; /* muted: axis + label text */
+  --color-ink-600: #52514e; /* secondary ink */
+  --color-ink-800: #383835; /* hairline borders, dark */
+  --color-ink-900: #1a1a19; /* primary ink light / surface dark */
+  --color-ink-950: #0d0d0d; /* page plane, dark */
+
+  --color-surface: #fcfcfb;
+  --font-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+html {
+  color-scheme: light dark;
+}
+
+body {
+  @apply bg-ink-50 text-ink-900 antialiased;
+  font-family: var(--font-sans);
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    @apply bg-ink-950 text-ink-100;
+  }
+}
