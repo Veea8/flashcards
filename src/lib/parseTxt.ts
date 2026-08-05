@@ -1,6 +1,9 @@
+import { looksLikeHtml } from './sanitizeHtml';
+
 export interface ParsedPair {
   front: string;
   back: string;
+  tags: string[];
 }
 
 export interface SkippedLine {
@@ -16,6 +19,12 @@ export interface ParseResult {
   delimiter: string | null;
   /** Human label for the UI, e.g. "tab" or "|". */
   delimiterLabel: string;
+  /** Cards carry HTML markup that should be rendered, not printed. */
+  html: boolean;
+  /** 1-indexed column the tags were taken from, if any. */
+  tagsColumn: number | null;
+  /** Column count seen in the file (>2 means extra columns were present). */
+  columns: number;
 }
 
 /**
@@ -34,28 +43,63 @@ const CANDIDATES: { value: string; label: string }[] = [
 /** A line must split cleanly this often for a delimiter to be accepted. */
 const CONFIDENCE_THRESHOLD = 0.8;
 
-function contentLines(text: string): { line: number; text: string }[] {
-  return text
-    .replace(/^﻿/, '') // strip BOM
-    .replace(/\r\n?/g, '\n')
-    .split('\n')
-    .map((text, i) => ({ line: i + 1, text }))
-    .filter(({ text }) => text.trim() !== '' && !text.trimStart().startsWith('#'));
+/** Anki writes its export settings as `#key:value` lines at the top of the file. */
+interface Directives {
+  separator?: { value: string; label: string };
+  html?: boolean;
+  tagsColumn?: number;
 }
 
-/** Split on the FIRST occurrence only, so delimiters inside the answer survive. */
-function splitOnce(line: string, delimiter: string): [string, string] | null {
-  const at = line.indexOf(delimiter);
-  if (at === -1) return null;
-  return [line.slice(0, at), line.slice(at + delimiter.length)];
+const SEPARATOR_NAMES: Record<string, { value: string; label: string }> = {
+  tab: { value: '\t', label: 'tab' },
+  comma: { value: ',', label: ',' },
+  semicolon: { value: ';', label: ';' },
+  pipe: { value: '|', label: '|' },
+  space: { value: ' ', label: 'space' },
+  colon: { value: ':', label: ':' },
+};
+
+function parseDirectives(rawLines: string[]): Directives {
+  const d: Directives = {};
+  for (const raw of rawLines) {
+    if (!raw.startsWith('#')) continue;
+    const match = /^#\s*([a-z ]+)\s*:\s*(.+?)\s*$/i.exec(raw);
+    if (!match) continue;
+    const key = match[1].trim().toLowerCase();
+    const value = match[2].trim();
+
+    if (key === 'separator') {
+      d.separator = SEPARATOR_NAMES[value.toLowerCase()] ?? { value, label: value };
+    } else if (key === 'html') {
+      d.html = value.toLowerCase() === 'true';
+    } else if (key === 'tags column') {
+      const n = Number(value);
+      if (Number.isInteger(n) && n > 0) d.tagsColumn = n;
+    }
+  }
+  return d;
+}
+
+function contentLines(text: string): { all: string[]; content: { line: number; text: string }[] } {
+  const all = text
+    .replace(/^﻿/, '') // strip BOM
+    .replace(/\r\n?/g, '\n')
+    .split('\n');
+
+  return {
+    all,
+    content: all
+      .map((text, i) => ({ line: i + 1, text }))
+      .filter(({ text }) => text.trim() !== '' && !text.trimStart().startsWith('#')),
+  };
 }
 
 function scoreDelimiter(lines: { text: string }[], delimiter: string): number {
   if (lines.length === 0) return 0;
   let ok = 0;
   for (const { text } of lines) {
-    const parts = splitOnce(text, delimiter);
-    if (parts && parts[0].trim() !== '' && parts[1].trim() !== '') ok++;
+    const parts = text.split(delimiter);
+    if (parts.length >= 2 && parts[0].trim() !== '' && parts[1].trim() !== '') ok++;
   }
   return ok / lines.length;
 }
@@ -77,32 +121,71 @@ function unescapeField(s: string): string {
   return s.trim().replace(/\\n/g, '\n');
 }
 
+function splitTags(field: string): string[] {
+  return field
+    .split(/[\s,]+/)
+    .map((t) => t.trim())
+    .filter(Boolean);
+}
+
 export function parseTxt(text: string): ParseResult {
-  const lines = contentLines(text);
-  const detected = detectDelimiter(lines);
+  const { all, content } = contentLines(text);
+  const directives = parseDirectives(all);
+  const detected = directives.separator ?? detectDelimiter(content);
+
+  const empty: ParseResult = {
+    cards: [],
+    skipped: [],
+    delimiter: null,
+    delimiterLabel: '',
+    html: false,
+    tagsColumn: null,
+    columns: 0,
+  };
 
   if (!detected) {
     return {
-      cards: [],
-      skipped: lines.map(({ line, text }) => ({ line, text, reason: 'no-delimiter' as const })),
-      delimiter: null,
-      delimiterLabel: '',
+      ...empty,
+      skipped: content.map(({ line, text }) => ({ line, text, reason: 'no-delimiter' as const })),
     };
   }
+
+  const rows = content.map(({ line, text }) => ({ line, text, parts: text.split(detected.value) }));
+  const columns = Math.max(0, ...rows.map((r) => r.parts.length));
+
+  /*
+   * Where do the tags live? Anki states it outright; otherwise a tab file
+   * whose every row has the same 3+ columns is that same export minus its
+   * header, so the trailing column is tags rather than something to glue onto
+   * the answer. The guess is restricted to TAB files on purpose — in a comma
+   * file the extra "columns" are usually just commas inside the answer.
+   * Either way the import preview shows what was decided.
+   */
+  const consistent = rows.length > 0 && rows.every((r) => r.parts.length === columns);
+  const tagsColumn =
+    directives.tagsColumn && directives.tagsColumn <= columns
+      ? directives.tagsColumn
+      : detected.value === '\t' && columns >= 3 && consistent
+        ? columns
+        : null;
 
   const cards: ParsedPair[] = [];
   const skipped: SkippedLine[] = [];
   const seenFronts = new Set<string>();
 
-  for (const { line, text: raw } of lines) {
-    const parts = splitOnce(raw, detected.value);
-    if (!parts) {
+  for (const { line, text: raw, parts } of rows) {
+    if (parts.length < 2) {
       skipped.push({ line, text: raw, reason: 'no-delimiter' });
       continue;
     }
 
+    const tags = tagsColumn ? splitTags(parts[tagsColumn - 1] ?? '') : [];
+    // Everything between the front and the tags column belongs to the answer,
+    // so a stray extra column is never silently dropped.
+    const backEnd = tagsColumn ? tagsColumn - 1 : parts.length;
     const front = unescapeField(parts[0]);
-    const back = unescapeField(parts[1]);
+    const back = unescapeField(parts.slice(1, backEnd).join(detected.value));
+
     if (front === '' || back === '') {
       skipped.push({ line, text: raw, reason: 'empty-side' });
       continue;
@@ -115,8 +198,19 @@ export function parseTxt(text: string): ParseResult {
     }
 
     seenFronts.add(key);
-    cards.push({ front, back });
+    cards.push({ front, back, tags });
   }
 
-  return { cards, skipped, delimiter: detected.value, delimiterLabel: detected.label };
+  const html =
+    directives.html ?? cards.some((c) => looksLikeHtml(c.front) || looksLikeHtml(c.back));
+
+  return {
+    cards,
+    skipped,
+    delimiter: detected.value,
+    delimiterLabel: detected.label,
+    html,
+    tagsColumn,
+    columns,
+  };
 }

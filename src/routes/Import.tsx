@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import Dropzone from '../components/Dropzone';
+import RichText from '../components/RichText';
 import { parseTxt } from '../lib/parseTxt';
 import { createDeckFromCards } from '../db/repo';
 
@@ -43,6 +44,7 @@ export default function Import() {
       deckName.trim() || 'Untitled deck',
       result.cards,
       file?.name,
+      result.html,
     );
     navigate(`/study/${id}`);
   }
@@ -98,6 +100,8 @@ export default function Import() {
               <p className="mb-3 text-sm text-ink-600 dark:text-ink-400">
                 Detected <strong>{result.delimiterLabel}</strong> as the separator ·{' '}
                 {result.cards.length} card{result.cards.length === 1 ? '' : 's'}
+                {result.tagsColumn && ` · column ${result.tagsColumn} imported as tags`}
+                {result.html && ' · formatting preserved'}
                 {result.skipped.length > 0 &&
                   ` · ${result.skipped.length} line${result.skipped.length === 1 ? '' : 's'} skipped`}
               </p>
@@ -113,8 +117,17 @@ export default function Import() {
                   <tbody>
                     {result.cards.slice(0, 10).map((c, i) => (
                       <tr key={i} className="border-t border-ink-200 dark:border-ink-800">
-                        <td className="px-4 py-2 whitespace-pre-wrap">{c.front}</td>
-                        <td className="px-4 py-2 whitespace-pre-wrap">{c.back}</td>
+                        <td className="px-4 py-2 align-top">
+                          <RichText text={c.front} html={result.html} />
+                        </td>
+                        <td className="px-4 py-2 align-top">
+                          <RichText text={c.back} html={result.html} />
+                          {c.tags.length > 0 && (
+                            <span className="mt-1 block text-xs text-ink-400">
+                              {c.tags.join(' · ')}
+                            </span>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

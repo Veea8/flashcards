@@ -22,10 +22,23 @@ capital of France | Paris
 primary colours,red, yellow, blue
 ```
 
-Blank lines and lines starting with `#` are ignored. Lines that can't be parsed are
-listed in the import preview instead of failing the import. Duplicate fronts are
-dropped. `\n` inside a field becomes a real line break. Two sample files live in
-`samples/`.
+Blank lines and comment lines starting with `#` are ignored. Lines that can't be
+parsed are listed in the import preview instead of failing the import. Duplicate
+fronts are dropped. `\n` inside a field becomes a real line break. Two sample files
+live in `samples/`.
+
+### Anki exports
+
+Anki's own `.txt` export drops in unchanged. Its header directives are honored:
+
+- `#separator:tab` (also `comma`, `semicolon`, `pipe`, `space`, `colon`)
+- `#html:true` — card markup (`<b>`, `<sub>`, `<sup>`, `<br>`, tables, lists, `<pre>`)
+  and HTML entities like `&cap;` are rendered rather than printed
+- `#tags column:3` — that column becomes tags instead of being glued onto the answer
+
+A tab file with a consistent third column is treated as `front / back / tags` even
+without the header. Imported HTML is sanitized on render: tags are allowlisted and
+every attribute is stripped, so a file can't carry scripts or tracking into the app.
 
 ## Studying
 

@@ -19,6 +19,24 @@ db.version(1).stores({
   reviews: 'id, cardId, deckId, reviewedAt',
 });
 
+// v2 adds tags + an HTML flag to cards. `*tags` is a multi-entry index, ready
+// for tag filtering; the upgrade backfills decks imported before v2.
+db.version(2)
+  .stores({
+    decks: 'id, name, createdAt',
+    cards: 'id, deckId, due, starred, *tags, [deckId+due], [deckId+starred]',
+    reviews: 'id, cardId, deckId, reviewedAt',
+  })
+  .upgrade((tx) =>
+    tx
+      .table('cards')
+      .toCollection()
+      .modify((card: Partial<Card>) => {
+        card.tags ??= [];
+        card.html ??= false;
+      }),
+  );
+
 export function newId(): string {
   return crypto.randomUUID();
 }

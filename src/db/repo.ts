@@ -1,3 +1,4 @@
+import type { UpdateSpec } from 'dexie';
 import { db, newId } from './db';
 import type { Card, Deck, FsrsState, Rating, ReviewLog } from './schema';
 import { newCardState } from '../lib/scheduler';
@@ -12,10 +13,18 @@ export interface DeckSummary extends Deck {
   newCards: number;
 }
 
+/** What an import supplies for one card. */
+export interface CardInput {
+  front: string;
+  back: string;
+  tags?: string[];
+}
+
 export async function createDeckFromCards(
   name: string,
-  pairs: { front: string; back: string }[],
+  pairs: CardInput[],
   sourceFilename?: string,
+  html = false,
 ): Promise<string> {
   const now = Date.now();
   const deckId = newId();
@@ -25,6 +34,8 @@ export async function createDeckFromCards(
     deckId,
     front: p.front,
     back: p.back,
+    tags: p.tags ?? [],
+    html,
     createdAt: now,
     starred: 0,
     ...newCardState(now),
@@ -40,7 +51,8 @@ export async function createDeckFromCards(
 
 export async function addCardsToDeck(
   deckId: string,
-  pairs: { front: string; back: string }[],
+  pairs: CardInput[],
+  html = false,
 ): Promise<number> {
   const now = Date.now();
   const cards: Card[] = pairs.map((p) => ({
@@ -48,6 +60,8 @@ export async function addCardsToDeck(
     deckId,
     front: p.front,
     back: p.back,
+    tags: p.tags ?? [],
+    html,
     createdAt: now,
     starred: 0,
     ...newCardState(now),
@@ -108,7 +122,9 @@ export async function applyReview(
   await db.transaction('rw', db.cards, db.reviews, async () => {
     const card = await db.cards.get(cardId);
     if (!card) return;
-    await db.cards.update(cardId, updated);
+    // Cast: Dexie's UpdateSpec expands array fields into dotted key paths,
+    // which a plain FsrsState (no array fields at all) can't satisfy.
+    await db.cards.update(cardId, updated as UpdateSpec<Card>);
     await db.reviews.add({
       id: newId(),
       cardId,

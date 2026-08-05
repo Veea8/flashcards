@@ -1,11 +1,16 @@
+// @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
 import { parseTxt } from './parseTxt';
+
+/** Cards without tags, for the many cases where tags aren't the point. */
+const pairs = (r: ReturnType<typeof parseTxt>) =>
+  r.cards.map(({ front, back }) => ({ front, back }));
 
 describe('parseTxt', () => {
   it('parses a tab-separated file', () => {
     const r = parseTxt('bonjour\thello\nmerci\tthank you\n');
     expect(r.delimiterLabel).toBe('tab');
-    expect(r.cards).toEqual([
+    expect(pairs(r)).toEqual([
       { front: 'bonjour', back: 'hello' },
       { front: 'merci', back: 'thank you' },
     ]);
@@ -15,7 +20,7 @@ describe('parseTxt', () => {
   it('parses a pipe-separated file', () => {
     const r = parseTxt('capital of France | Paris\ncapital of Peru | Lima');
     expect(r.delimiterLabel).toBe('|');
-    expect(r.cards[0]).toEqual({ front: 'capital of France', back: 'Paris' });
+    expect(pairs(r)[0]).toEqual({ front: 'capital of France', back: 'Paris' });
   });
 
   it('parses semicolons', () => {
@@ -27,14 +32,15 @@ describe('parseTxt', () => {
   it('keeps commas that appear inside the answer', () => {
     const r = parseTxt('primary colours,red, yellow, blue\nsecondary,green, orange, purple');
     expect(r.delimiterLabel).toBe(',');
-    expect(r.cards[0]).toEqual({ front: 'primary colours', back: 'red, yellow, blue' });
-    expect(r.cards[1]).toEqual({ front: 'secondary', back: 'green, orange, purple' });
+    expect(r.tagsColumn).toBeNull(); // trailing commas are prose, not a tags column
+    expect(pairs(r)[0]).toEqual({ front: 'primary colours', back: 'red, yellow, blue' });
+    expect(pairs(r)[1]).toEqual({ front: 'secondary', back: 'green, orange, purple' });
   });
 
   it('prefers tab over comma when both are present', () => {
     const r = parseTxt('a, b, c\tfirst three letters\nd, e, f\tnext three letters');
     expect(r.delimiterLabel).toBe('tab');
-    expect(r.cards[0]).toEqual({ front: 'a, b, c', back: 'first three letters' });
+    expect(pairs(r)[0]).toEqual({ front: 'a, b, c', back: 'first three letters' });
   });
 
   it('skips junk lines instead of failing the whole import', () => {
@@ -59,7 +65,7 @@ describe('parseTxt', () => {
 
   it('dedupes repeated fronts, keeping the first', () => {
     const r = parseTxt('cat\tgato\ncat\tel gato\ndog\tperro');
-    expect(r.cards).toEqual([
+    expect(pairs(r)).toEqual([
       { front: 'cat', back: 'gato' },
       { front: 'dog', back: 'perro' },
     ]);
@@ -68,7 +74,7 @@ describe('parseTxt', () => {
 
   it('handles CRLF line endings and a BOM', () => {
     const r = parseTxt('﻿alpha\tfirst\r\nbeta\tsecond\r\n');
-    expect(r.cards).toEqual([
+    expect(pairs(r)).toEqual([
       { front: 'alpha', back: 'first' },
       { front: 'beta', back: 'second' },
     ]);
@@ -91,5 +97,52 @@ describe('parseTxt', () => {
     expect(r.cards).toHaveLength(0);
     expect(r.skipped).toHaveLength(3);
     expect(r.delimiter).toBeNull();
+  });
+});
+
+describe('Anki exports', () => {
+  const ANKI = [
+    '#separator:tab',
+    '#html:true',
+    '#tags column:3',
+    'Define: <b>disjoint</b>\tA &cap; B = &empty;<br>no shared elements.\tAW_Math_Basics',
+    'Binomial <b>C(n,k)</b>\tn! / (k! &middot; (n&minus;k)!)\tAW_Math_Basics combinatorics',
+  ].join('\n');
+
+  it('honours the header directives', () => {
+    const r = parseTxt(ANKI);
+    expect(r.delimiterLabel).toBe('tab');
+    expect(r.html).toBe(true);
+    expect(r.tagsColumn).toBe(3);
+    expect(r.cards).toHaveLength(2);
+  });
+
+  it('keeps the tags column out of the answer', () => {
+    const r = parseTxt(ANKI);
+    expect(r.cards[0].back).toBe('A &cap; B = &empty;<br>no shared elements.');
+    expect(r.cards[0].back).not.toContain('AW_Math_Basics');
+    expect(r.cards[0].tags).toEqual(['AW_Math_Basics']);
+    expect(r.cards[1].tags).toEqual(['AW_Math_Basics', 'combinatorics']);
+  });
+
+  it('treats a consistent third tab column as tags even without the header', () => {
+    const r = parseTxt('front one\tback one\ttagA\nfront two\tback two\ttagB');
+    expect(r.tagsColumn).toBe(3);
+    expect(r.cards[0]).toEqual({ front: 'front one', back: 'back one', tags: ['tagA'] });
+  });
+
+  it('does not steal a column when the third field is ragged', () => {
+    const r = parseTxt('front one\tback one\textra\nfront two\tback two');
+    expect(r.tagsColumn).toBeNull();
+    expect(r.cards[0].back).toBe('back one\textra');
+  });
+
+  it('detects HTML even when the file has no #html header', () => {
+    const r = parseTxt('term\tan <i>italic</i> definition');
+    expect(r.html).toBe(true);
+  });
+
+  it('leaves plain files marked as plain', () => {
+    expect(parseTxt('bonjour\thello').html).toBe(false);
   });
 });

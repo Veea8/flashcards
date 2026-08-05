@@ -34,6 +34,10 @@ export interface Card extends FsrsState {
   deckId: string;
   front: string;
   back: string;
+  /** Tags from the import (e.g. Anki's tags column). */
+  tags: string[];
+  /** Content carries HTML markup that should be rendered rather than printed. */
+  html: boolean;
   createdAt: number;
   /** "Important" flag. Purely a label — it never influences scheduling. */
   starred: 0 | 1; // IndexedDB cannot index booleans, so 0/1

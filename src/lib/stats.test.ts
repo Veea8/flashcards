@@ -36,6 +36,8 @@ function card(partial: Partial<Card>): Card {
     deckId: 'd1',
     front: 'f',
     back: 'b',
+    tags: [],
+    html: false,
     createdAt: 0,
     starred: 0,
     due: 0,

@@ -32,3 +32,61 @@ body {
     @apply bg-ink-950 text-ink-100;
   }
 }
+
+/*
+ * Imported card HTML (Anki exports). Tailwind's reset strips element defaults,
+ * so the handful of tags cards actually use get their formatting back here.
+ */
+.card-html {
+  line-height: 1.55;
+  /* A wide imported table scrolls inside the card, never the page. */
+  overflow-x: auto;
+}
+.card-html b,
+.card-html strong {
+  @apply font-semibold;
+}
+.card-html i,
+.card-html em {
+  font-style: italic;
+}
+.card-html u {
+  text-decoration: underline;
+}
+.card-html sub,
+.card-html sup {
+  font-size: 0.75em;
+  line-height: 0;
+  position: relative;
+}
+.card-html sup {
+  vertical-align: super;
+}
+.card-html sub {
+  vertical-align: sub;
+}
+.card-html ul,
+.card-html ol {
+  @apply my-2 ml-5 space-y-1 text-left;
+  list-style: revert;
+}
+.card-html pre {
+  @apply my-2 overflow-x-auto rounded-lg bg-ink-100 p-3 text-left text-[0.9em] dark:bg-ink-950;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.card-html code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.card-html table {
+  @apply my-2 w-full border-collapse text-left text-[0.95em];
+}
+.card-html td,
+.card-html th {
+  @apply border border-ink-200 px-2 py-1 dark:border-ink-800;
+}
+.card-html hr {
+  @apply my-3 border-ink-200 dark:border-ink-800;
+}
+.card-html blockquote {
+  @apply my-2 border-l-2 border-ink-200 pl-3 text-left dark:border-ink-800;
+}

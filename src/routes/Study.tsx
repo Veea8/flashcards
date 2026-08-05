@@ -221,7 +221,13 @@ export default function Study() {
             aria-label="Reveal answer"
             disabled={revealed}
           >
-            <CardFace front={current.front} back={current.back} revealed={revealed} />
+            <CardFace
+              front={current.front}
+              back={current.back}
+              html={current.html}
+              tags={current.tags}
+              revealed={revealed}
+            />
           </button>
 
           {revealed && intervals ? (
