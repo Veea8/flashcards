@@ -42,6 +42,12 @@ A tab file with a consistent third column is treated as `front / back / tags` ev
 without the header. Imported HTML is sanitized on render: tags are allowlisted and
 every attribute is stripped, so a file can't carry scripts or tracking into the app.
 
+### Generating a deck with an AI
+
+`samples/AI_PROMPT.md` holds a prompt to paste into any AI chat that produces a file
+in exactly this format — correct separator, HTML formatting, and one topic tag per
+card so the import splits into subdecks.
+
 ## Subdecks
 
 If a file carries deck names or tags, the import screen offers to split it into
