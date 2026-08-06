@@ -4,6 +4,8 @@ export interface ParsedPair {
   front: string;
   back: string;
   tags: string[];
+  /** Deck name from a deck column or `#deck:`; may use `::` for hierarchy. */
+  deck?: string;
 }
 
 export interface SkippedLine {
@@ -23,6 +25,8 @@ export interface ParseResult {
   html: boolean;
   /** 1-indexed column the tags were taken from, if any. */
   tagsColumn: number | null;
+  /** 1-indexed column the deck names were taken from, if any. */
+  deckColumn: number | null;
   /** Column count seen in the file (>2 means extra columns were present). */
   columns: number;
 }
@@ -48,6 +52,9 @@ interface Directives {
   separator?: { value: string; label: string };
   html?: boolean;
   tagsColumn?: number;
+  deckColumn?: number;
+  /** `#deck:Name` names the whole file. */
+  deck?: string;
 }
 
 const SEPARATOR_NAMES: Record<string, { value: string; label: string }> = {
@@ -75,6 +82,11 @@ function parseDirectives(rawLines: string[]): Directives {
     } else if (key === 'tags column') {
       const n = Number(value);
       if (Number.isInteger(n) && n > 0) d.tagsColumn = n;
+    } else if (key === 'deck column') {
+      const n = Number(value);
+      if (Number.isInteger(n) && n > 0) d.deckColumn = n;
+    } else if (key === 'deck') {
+      d.deck = value;
     }
   }
   return d;
@@ -140,6 +152,7 @@ export function parseTxt(text: string): ParseResult {
     delimiterLabel: '',
     html: false,
     tagsColumn: null,
+    deckColumn: null,
     columns: 0,
   };
 
@@ -169,6 +182,9 @@ export function parseTxt(text: string): ParseResult {
         ? columns
         : null;
 
+  const deckColumn =
+    directives.deckColumn && directives.deckColumn <= columns ? directives.deckColumn : null;
+
   const cards: ParsedPair[] = [];
   const skipped: SkippedLine[] = [];
   const seenFronts = new Set<string>();
@@ -180,9 +196,13 @@ export function parseTxt(text: string): ParseResult {
     }
 
     const tags = tagsColumn ? splitTags(parts[tagsColumn - 1] ?? '') : [];
-    // Everything between the front and the tags column belongs to the answer,
-    // so a stray extra column is never silently dropped.
-    const backEnd = tagsColumn ? tagsColumn - 1 : parts.length;
+    const deck = deckColumn ? parts[deckColumn - 1]?.trim() || undefined : directives.deck;
+
+    // Metadata columns sit at the end in every export we've seen; everything
+    // before the first of them belongs to the answer, so a stray extra column
+    // is never silently dropped.
+    const reserved = [tagsColumn, deckColumn].filter((n): n is number => n != null);
+    const backEnd = reserved.length ? Math.min(...reserved) - 1 : parts.length;
     const front = unescapeField(parts[0]);
     const back = unescapeField(parts.slice(1, backEnd).join(detected.value));
 
@@ -198,7 +218,7 @@ export function parseTxt(text: string): ParseResult {
     }
 
     seenFronts.add(key);
-    cards.push({ front, back, tags });
+    cards.push({ front, back, tags, deck });
   }
 
   const html =
@@ -211,6 +231,7 @@ export function parseTxt(text: string): ParseResult {
     delimiterLabel: detected.label,
     html,
     tagsColumn,
+    deckColumn,
     columns,
   };
 }

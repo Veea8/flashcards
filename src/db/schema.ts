@@ -13,6 +13,8 @@ export interface Deck {
   name: string;
   createdAt: number;
   sourceFilename?: string;
+  /** Parent deck, for subdecks. Absent on a top-level deck. */
+  parentId?: string;
 }
 
 /** The FSRS scheduling fields, stored flat on Card. */

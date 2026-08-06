@@ -37,6 +37,14 @@ db.version(2)
       }),
   );
 
+// v3 adds subdecks. `parentId` is left undefined on top-level decks, which
+// IndexedDB simply omits from the index — so the index only ever lists children.
+db.version(3).stores({
+  decks: 'id, name, createdAt, parentId',
+  cards: 'id, deckId, due, starred, *tags, [deckId+due], [deckId+starred]',
+  reviews: 'id, cardId, deckId, reviewedAt',
+});
+
 export function newId(): string {
   return crypto.randomUUID();
 }

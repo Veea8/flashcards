@@ -36,9 +36,27 @@ Anki's own `.txt` export drops in unchanged. Its header directives are honored:
   and HTML entities like `&cap;` are rendered rather than printed
 - `#tags column:3` — that column becomes tags instead of being glued onto the answer
 
+- `#deck column:N` / `#deck:Name` — deck names, with `::` for nesting
+
 A tab file with a consistent third column is treated as `front / back / tags` even
 without the header. Imported HTML is sanitized on render: tags are allowlisted and
 every attribute is stripped, so a file can't carry scripts or tracking into the app.
+
+## Subdecks
+
+If a file carries deck names or tags, the import screen offers to split it into
+subdecks nested under one parent — an 11-tag Anki export becomes a parent deck with
+11 children. You can untick any group (its cards fall back to the parent) or turn
+the split off entirely.
+
+Grouping uses the deck name if there is one, otherwise the card's **first** tag; a
+card lands in exactly one subdeck, since duplicating it would schedule the same
+material several times over. A shared prefix is trimmed from the names, so
+`AW_Probability` and `AW_Cycles` become `Probability` and `Cycles`. Anki's `::`
+syntax nests further.
+
+Parent decks show rolled-up counts, and studying a parent covers every card beneath
+it. Deleting a deck deletes its subdecks too.
 
 ## Studying
 

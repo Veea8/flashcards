@@ -145,7 +145,12 @@ export default function Dashboard() {
                   {perDeck(decks, cards.filter(isLive), reviews, now).map((d) => (
                     <tr key={d.id} className="border-t border-ink-200 dark:border-ink-800">
                       <td className="px-5 py-2.5">
-                        <Link to={`/study/${d.id}`} className="hover:underline">
+                        <Link
+                          to={`/study/${d.id}`}
+                          className="hover:underline"
+                          style={d.depth > 0 ? { marginLeft: d.depth * 16 } : undefined}
+                        >
+                          {d.depth > 0 && <span className="mr-1.5 text-ink-400">└</span>}
                           {d.name}
                         </Link>
                       </td>

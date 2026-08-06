@@ -10,13 +10,16 @@ import {
   addCardsToDeck,
   applyReview,
   createDeckFromCards,
+  deleteDeck,
   getAllLiveCards,
   getAllReviews,
   getDueCards,
   getNextDueAt,
-  listDeckSummaries,
+  importDeckTree,
+  listDeckTree,
   restoreCard,
   softDeleteCard,
+  subtreeIds,
   toggleStar,
 } from './repo';
 import { gradeCard } from '../lib/scheduler';
@@ -42,8 +45,9 @@ describe('deck import', () => {
     expect(due.every((c) => c.state === 0)).toBe(true);
     expect(due.every((c) => c.due <= Date.now())).toBe(true);
 
-    const [summary] = await listDeckSummaries();
-    expect(summary).toMatchObject({ name: 'French', total: 3, due: 3, newCards: 3, starred: 0 });
+    const [node] = await listDeckTree();
+    expect(node).toMatchObject({ name: 'French', total: 3, due: 3, newCards: 3, starred: 0 });
+    expect(node.children).toHaveLength(0);
   });
 });
 
@@ -137,7 +141,7 @@ describe('soft delete', () => {
 
     expect(await getDueCards(deckId)).toHaveLength(2);
     expect(await getAllLiveCards()).toHaveLength(2);
-    expect((await listDeckSummaries())[0].total).toBe(2);
+    expect((await listDeckTree())[0].rollup.total).toBe(2);
 
     // The row is still there, just flagged — and the work still counts.
     expect((await db.cards.get(card.id))!.deletedAt).toBeTypeOf('number');
@@ -200,5 +204,88 @@ describe('queue helpers', () => {
     const mix = stateMix(await getAllLiveCards());
     expect(mix[0]).toBe(3);
     expect(mix[1] + mix[2]).toBe(1);
+  });
+});
+
+describe('subdecks', () => {
+  const GROUPS = [
+    { path: ['Probability'], cards: [{ front: 'p1', back: 'a' }, { front: 'p2', back: 'b' }] },
+    { path: ['Graphs'], cards: [{ front: 'g1', back: 'c' }] },
+  ];
+
+  it('nests subdecks under the parent and rolls counts up', async () => {
+    const rootId = await importDeckTree('AW', GROUPS);
+
+    const [root] = await listDeckTree();
+    expect(root.id).toBe(rootId);
+    expect(root.total).toBe(0); // the parent holds no cards of its own
+    expect(root.rollup.total).toBe(3); // but its subtree does
+    expect(root.rollup.due).toBe(3);
+
+    // Biggest subdeck first.
+    expect(root.children.map((c) => c.name)).toEqual(['Probability', 'Graphs']);
+    expect(root.children[0].rollup.total).toBe(2);
+    expect(root.children.every((c) => c.parentId === rootId)).toBe(true);
+  });
+
+  it('studies a parent across all of its subdecks', async () => {
+    const rootId = await importDeckTree('AW', GROUPS);
+
+    const all = await getDueCards(rootId);
+    expect(all.map((c) => c.front).sort()).toEqual(['g1', 'p1', 'p2']);
+
+    // A child studies only its own cards.
+    const [root] = await listDeckTree();
+    const probability = root.children.find((c) => c.name === 'Probability')!;
+    expect((await getDueCards(probability.id)).map((c) => c.front).sort()).toEqual(['p1', 'p2']);
+  });
+
+  it('builds a deeper tree from a :: style path and reuses ancestors', async () => {
+    const rootId = await importDeckTree('AW', [
+      { path: ['Algorithms', 'Probability'], cards: [{ front: 'a', back: '1' }] },
+      { path: ['Algorithms', 'Graphs'], cards: [{ front: 'b', back: '2' }] },
+    ]);
+
+    const [root] = await listDeckTree();
+    expect(root.children).toHaveLength(1); // one shared "Algorithms" level
+    const algorithms = root.children[0];
+    expect(algorithms.name).toBe('Algorithms');
+    expect(algorithms.children.map((c) => c.name).sort()).toEqual(['Graphs', 'Probability']);
+    expect(algorithms.rollup.total).toBe(2);
+    expect(await subtreeIds(rootId)).toHaveLength(4);
+  });
+
+  it('keeps ungrouped cards in the parent deck itself', async () => {
+    const rootId = await importDeckTree('AW', [
+      { path: [], cards: [{ front: 'loose', back: 'x' }] },
+      ...GROUPS,
+    ]);
+
+    const [root] = await listDeckTree();
+    expect(root.total).toBe(1);
+    expect(root.rollup.total).toBe(4);
+    expect((await getDueCards(rootId)).map((c) => c.front)).toContain('loose');
+  });
+
+  it('deletes the whole subtree with the parent', async () => {
+    const rootId = await importDeckTree('AW', GROUPS);
+    await deleteDeck(rootId);
+
+    expect(await listDeckTree()).toHaveLength(0);
+    expect(await db.decks.count()).toBe(0);
+    expect(await db.cards.count()).toBe(0);
+  });
+
+  it('deletes only one branch when a child is removed', async () => {
+    const rootId = await importDeckTree('AW', GROUPS);
+    const [root] = await listDeckTree();
+    const graphs = root.children.find((c) => c.name === 'Graphs')!;
+
+    await deleteDeck(graphs.id);
+
+    const [after] = await listDeckTree();
+    expect(after.children.map((c) => c.name)).toEqual(['Probability']);
+    expect(after.rollup.total).toBe(2);
+    expect(await getDueCards(rootId)).toHaveLength(2);
   });
 });

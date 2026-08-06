@@ -145,4 +145,38 @@ describe('Anki exports', () => {
   it('leaves plain files marked as plain', () => {
     expect(parseTxt('bonjour\thello').html).toBe(false);
   });
+
+  it('reads a deck column and keeps it out of the answer', () => {
+    const r = parseTxt(
+      [
+        '#separator:tab',
+        '#deck column:3',
+        '#tags column:4',
+        'q1\ta1\tAlgorithms::Probability\ttagA',
+        'q2\ta2\tAlgorithms::Graphs\ttagB',
+      ].join('\n'),
+    );
+    expect(r.deckColumn).toBe(3);
+    expect(r.tagsColumn).toBe(4);
+    expect(r.cards[0]).toEqual({
+      front: 'q1',
+      back: 'a1',
+      deck: 'Algorithms::Probability',
+      tags: ['tagA'],
+    });
+  });
+
+  it('applies a whole-file #deck name to every card', () => {
+    const r = parseTxt('#separator:tab\n#deck:Discrete Maths\nq\ta');
+    expect(r.cards[0].deck).toBe('Discrete Maths');
+    expect(r.deckColumn).toBeNull();
+  });
+
+  it('keeps the answer intact when the deck column precedes the tags column', () => {
+    const r = parseTxt('#separator:tab\n#deck column:2\n#tags column:3\nq\tDeckName\ttagA');
+    // Column 2 is the deck, so there is no answer text left — the line is
+    // reported rather than silently importing "DeckName" as the answer.
+    expect(r.cards).toHaveLength(0);
+    expect(r.skipped[0]).toMatchObject({ reason: 'empty-side' });
+  });
 });

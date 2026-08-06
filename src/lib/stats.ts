@@ -169,6 +169,8 @@ export function upcomingWorkload(
 export interface DeckStats {
   id: string;
   name: string;
+  /** Nesting level; 0 for a top-level deck. */
+  depth: number;
   total: number;
   due: number;
   starred: number;
@@ -176,25 +178,65 @@ export interface DeckStats {
   lastStudied: number | null;
 }
 
+/**
+ * One row per deck, in tree order, with every figure covering the deck AND its
+ * subdecks — a parent that holds no cards itself would otherwise read as empty
+ * when all the work is one level down.
+ */
 export function perDeck(
   decks: Deck[],
   cards: Card[],
   reviews: ReviewLog[],
   now: number,
 ): DeckStats[] {
-  return decks.map((deck) => {
-    const own = cards.filter((c) => c.deckId === deck.id);
-    const logs = reviews.filter((r) => r.deckId === deck.id);
-    return {
+  const childrenOf = new Map<string, Deck[]>();
+  const roots: Deck[] = [];
+  for (const deck of decks) {
+    if (!deck.parentId) {
+      roots.push(deck);
+      continue;
+    }
+    const list = childrenOf.get(deck.parentId);
+    if (list) list.push(deck);
+    else childrenOf.set(deck.parentId, [deck]);
+  }
+
+  // A deck orphaned by bad data would otherwise vanish from the table.
+  const seen = new Set<string>();
+  const rows: DeckStats[] = [];
+
+  const walk = (deck: Deck, depth: number) => {
+    if (seen.has(deck.id)) return;
+    seen.add(deck.id);
+
+    const kids = childrenOf.get(deck.id) ?? [];
+    const subtree = new Set([deck.id, ...collectIds(kids, childrenOf)]);
+    const own = cards.filter((c) => subtree.has(c.deckId));
+    const logs = reviews.filter((r) => subtree.has(r.deckId));
+
+    rows.push({
       id: deck.id,
       name: deck.name,
+      depth,
       total: own.length,
       due: own.filter((c) => c.due <= now).length,
       starred: own.filter((c) => c.starred === 1).length,
       retention: retention(logs),
       lastStudied: logs.length ? Math.max(...logs.map((r) => r.reviewedAt)) : null,
-    };
-  });
+    });
+
+    for (const kid of [...kids].sort((a, b) => a.name.localeCompare(b.name))) {
+      walk(kid, depth + 1);
+    }
+  };
+
+  for (const root of roots) walk(root, 0);
+  for (const deck of decks) walk(deck, 0); // pick up any orphans
+  return rows;
+}
+
+function collectIds(decks: Deck[], childrenOf: Map<string, Deck[]>): string[] {
+  return decks.flatMap((d) => [d.id, ...collectIds(childrenOf.get(d.id) ?? [], childrenOf)]);
 }
 
 export function formatDuration(ms: number): string {

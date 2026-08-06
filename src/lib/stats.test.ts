@@ -3,6 +3,7 @@ import type { Card, Rating, ReviewLog } from '../db/schema';
 import {
   dayKey,
   formatDuration,
+  perDeck,
   retention,
   reviewsByDay,
   stateMix,
@@ -165,6 +166,53 @@ describe('stateMix', () => {
   it('counts cards per FSRS state', () => {
     const mix = stateMix([card({ state: 0 }), card({ state: 2 }), card({ state: 2 })]);
     expect(mix).toEqual({ 0: 1, 1: 0, 2: 2, 3: 0 });
+  });
+});
+
+describe('perDeck', () => {
+  const now = at(2026, 3, 10, 12);
+  const decks = [
+    { id: 'root', name: 'AW', createdAt: 0 },
+    { id: 'prob', name: 'Probability', createdAt: 0, parentId: 'root' },
+    { id: 'graph', name: 'Graphs', createdAt: 0, parentId: 'root' },
+  ];
+  const cards = [
+    card({ deckId: 'prob', due: now - DAY }), // due
+    card({ deckId: 'prob', due: now + DAY }),
+    card({ deckId: 'graph', due: now - DAY, starred: 1 }), // due
+  ];
+
+  it('rolls subdeck figures up into the parent row', () => {
+    const rows = perDeck(decks, cards, [], now);
+    const root = rows.find((r) => r.id === 'root')!;
+    expect(root).toMatchObject({ depth: 0, total: 3, due: 2, starred: 1 });
+  });
+
+  it('lists children under their parent, indented', () => {
+    const rows = perDeck(decks, cards, [], now);
+    expect(rows.map((r) => [r.name, r.depth])).toEqual([
+      ['AW', 0],
+      ['Graphs', 1],
+      ['Probability', 1],
+    ]);
+    expect(rows.find((r) => r.id === 'prob')).toMatchObject({ total: 2, due: 1 });
+  });
+
+  it('rolls a child’s reviews into the parent’s retention and last-studied', () => {
+    const reviews = [
+      { ...log(now - DAY, 3), deckId: 'prob' },
+      { ...log(now, 1), deckId: 'graph' },
+    ];
+    const rows = perDeck(decks, cards, reviews, now);
+    const root = rows.find((r) => r.id === 'root')!;
+    expect(root.retention).toBe(0.5); // one Good, one Again, across both children
+    expect(root.lastStudied).toBe(now);
+    expect(rows.find((r) => r.id === 'prob')!.retention).toBe(1);
+  });
+
+  it('still lists a deck whose parent is missing', () => {
+    const orphan = [{ id: 'lost', name: 'Lost', createdAt: 0, parentId: 'gone' }];
+    expect(perDeck(orphan, [], [], now).map((r) => r.name)).toEqual(['Lost']);
   });
 });
 

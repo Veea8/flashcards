@@ -3,7 +3,8 @@ import { useLocation, useNavigate } from 'react-router';
 import Dropzone from '../components/Dropzone';
 import RichText from '../components/RichText';
 import { parseTxt } from '../lib/parseTxt';
-import { createDeckFromCards } from '../db/repo';
+import { deckNameFromFile, detectSource, groupCards } from '../lib/grouping';
+import { importDeckTree } from '../db/repo';
 
 const SKIP_REASONS: Record<string, string> = {
   'no-delimiter': 'no separator found',
@@ -17,13 +18,22 @@ export default function Import() {
   const [deckName, setDeckName] = useState('');
   const [saving, setSaving] = useState(false);
   const [showAllSkipped, setShowAllSkipped] = useState(false);
+  const [split, setSplit] = useState(true);
+  /** Group keys the user unticked; their cards fall back to the parent deck. */
+  const [excluded, setExcluded] = useState<Set<string>>(new Set());
 
   const result = useMemo(() => (file ? parseTxt(file.text) : null), [file]);
+  const grouping = useMemo(
+    () => (result ? groupCards(result.cards, detectSource(result.cards)) : null),
+    [result],
+  );
 
   function handleFile(name: string, text: string) {
     setFile({ name, text });
-    setDeckName(name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' '));
+    setDeckName(deckNameFromFile(name));
     setShowAllSkipped(false);
+    setSplit(true);
+    setExcluded(new Set());
   }
 
   // A file dropped on the deck list arrives here via router state.
@@ -37,16 +47,27 @@ export default function Import() {
     }
   }, [location.state]);
 
+  const activeGroups =
+    split && grouping ? grouping.groups.filter((g) => !excluded.has(g.key)) : [];
+
   async function save() {
-    if (!result || result.cards.length === 0) return;
+    if (!result || !grouping || result.cards.length === 0) return;
     setSaving(true);
-    const id = await createDeckFromCards(
+
+    // Anything not going into a subdeck lands in the parent deck itself.
+    const inSubdecks = new Set(activeGroups.flatMap((g) => g.cards));
+    const rest = result.cards.filter((c) => !inSubdecks.has(c));
+
+    const id = await importDeckTree(
       deckName.trim() || 'Untitled deck',
-      result.cards,
-      file?.name,
-      result.html,
+      [
+        ...(rest.length ? [{ path: [], cards: rest }] : []),
+        ...activeGroups.map((g) => ({ path: g.path, cards: g.cards })),
+      ],
+      { sourceFilename: file?.name, html: result.html },
     );
-    navigate(`/study/${id}`);
+    // With subdecks there's a tree worth seeing; a single deck goes straight in.
+    navigate(activeGroups.length ? '/' : `/study/${id}`);
   }
 
   return (
@@ -96,6 +117,71 @@ export default function Import() {
                   {saving ? 'Importing…' : `Import ${result.cards.length} cards`}
                 </button>
               </div>
+
+              {grouping && grouping.groups.length > 1 && (
+                <div className="mb-6 rounded-xl border border-ink-200 p-5 dark:border-ink-800">
+                  <label className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={split}
+                      onChange={(e) => setSplit(e.target.checked)}
+                      className="mt-1 size-4"
+                    />
+                    <span>
+                      <span className="font-medium">
+                        Split into {grouping.groups.length} subdecks
+                      </span>
+                      <span className="mt-0.5 block text-sm text-ink-600 dark:text-ink-400">
+                        Grouped by {grouping.source === 'deck' ? 'deck name' : 'first tag'}, nested
+                        under “{deckName || 'Untitled deck'}”. Studying the parent covers every
+                        subdeck.
+                      </span>
+                    </span>
+                  </label>
+
+                  {split && (
+                    <ul className="mt-4 space-y-1 text-sm">
+                      {grouping.groups.map((g) => {
+                        const on = !excluded.has(g.key);
+                        return (
+                          <li key={g.key}>
+                            <label className="flex items-center gap-3 rounded-lg px-2 py-1 hover:bg-ink-100 dark:hover:bg-ink-950">
+                              <input
+                                type="checkbox"
+                                checked={on}
+                                onChange={() =>
+                                  setExcluded((prev) => {
+                                    const next = new Set(prev);
+                                    if (on) next.add(g.key);
+                                    else next.delete(g.key);
+                                    return next;
+                                  })
+                                }
+                                className="size-4"
+                              />
+                              <span className={`flex-1 ${on ? '' : 'text-ink-400 line-through'}`}>
+                                {g.path.join(' › ')}
+                              </span>
+                              <span className="tabular-nums text-ink-600 dark:text-ink-400">
+                                {g.cards.length}
+                              </span>
+                            </label>
+                          </li>
+                        );
+                      })}
+                      {grouping.ungrouped.length > 0 && (
+                        <li className="flex items-center gap-3 px-2 py-1 text-ink-600 dark:text-ink-400">
+                          <span className="size-4" />
+                          <span className="flex-1 italic">
+                            untagged — stays in “{deckName || 'Untitled deck'}”
+                          </span>
+                          <span className="tabular-nums">{grouping.ungrouped.length}</span>
+                        </li>
+                      )}
+                    </ul>
+                  )}
+                </div>
+              )}
 
               <p className="mb-3 text-sm text-ink-600 dark:text-ink-400">
                 Detected <strong>{result.delimiterLabel}</strong> as the separator ·{' '}
