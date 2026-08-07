@@ -42,17 +42,20 @@ export default function Dropzone({ onFile, compact }: Props) {
         }}
         className={[
           'cursor-pointer rounded-2xl border-2 border-dashed text-center transition',
-          compact ? 'p-6' : 'p-14',
+          compact ? 'p-5 sm:p-6' : 'p-8 sm:p-14',
           over
             ? 'border-sky-500 bg-sky-50 dark:bg-sky-950/40'
             : 'border-ink-200 hover:border-ink-400 dark:border-ink-800 dark:hover:border-ink-600',
         ].join(' ')}
       >
-        <p className={compact ? 'text-sm font-medium' : 'text-lg font-medium'}>
-          Drop a .txt file here
+        <p className={compact ? 'text-sm font-medium' : 'font-medium sm:text-lg'}>
+          {/* "Drop" means nothing on a phone — there is nothing to drag. */}
+          <span className="hidden sm:inline">Drop a .txt file here</span>
+          <span className="sm:hidden">Choose a .txt file</span>
         </p>
-        <p className="mt-1 text-sm text-ink-600 dark:text-ink-400">
-          or click to browse · one card per line, <code>front → back</code>
+        <p className="mt-1 text-xs text-ink-600 sm:text-sm dark:text-ink-400">
+          <span className="hidden sm:inline">or click to browse · </span>one card per line,{' '}
+          <code>front → back</code>
         </p>
         <input
           ref={inputRef}

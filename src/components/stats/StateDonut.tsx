@@ -56,13 +56,14 @@ export default function StateDonut({ mix, p }: { mix: StateMix; p: VizPalette })
   });
 
   return (
-    <div className="flex flex-wrap items-center gap-6">
+    <div className="flex flex-wrap items-center justify-center gap-4 sm:justify-start sm:gap-6">
       <svg
         viewBox={`0 0 ${SIZE} ${SIZE}`}
         width={SIZE}
         height={SIZE}
         role="img"
         aria-label="Cards by scheduling state"
+        className="shrink-0"
       >
         {total === 0 ? (
           <circle cx={cx} cy={cy} r={(R_OUTER + R_INNER) / 2} fill="none" stroke={p.grid} strokeWidth={R_OUTER - R_INNER} />

@@ -71,7 +71,7 @@ export default function Import() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-10">
+    <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-10">
       <button
         onClick={() => navigate('/')}
         className="mb-6 text-sm text-ink-600 hover:underline dark:text-ink-400"
@@ -79,7 +79,7 @@ export default function Import() {
         ← Back to decks
       </button>
 
-      <h1 className="mb-2 text-3xl font-semibold tracking-tight">Import a deck</h1>
+      <h1 className="mb-2 text-2xl font-semibold tracking-tight sm:text-3xl">Import a deck</h1>
       <p className="mb-8 text-ink-600 dark:text-ink-400">
         One card per line. Separate front from back with a tab, <code>|</code>, <code>;</code> or a
         comma — it's detected automatically. Lines starting with <code>#</code> are ignored.
@@ -100,19 +100,19 @@ export default function Import() {
             </div>
           ) : (
             <>
-              <div className="mb-6 flex flex-wrap items-end gap-4">
-                <label className="flex-1">
+              <div className="mb-6 flex flex-wrap items-end gap-3 sm:gap-4">
+                <label className="w-full sm:flex-1">
                   <span className="mb-1 block text-sm font-medium">Deck name</span>
                   <input
                     value={deckName}
                     onChange={(e) => setDeckName(e.target.value)}
-                    className="w-full rounded-lg border border-ink-200 bg-white px-3 py-2 outline-none focus:border-sky-500 dark:border-ink-800 dark:bg-ink-900"
+                    className="w-full rounded-lg border border-ink-200 bg-white px-3 py-2.5 outline-none focus:border-sky-500 sm:py-2 dark:border-ink-800 dark:bg-ink-900"
                   />
                 </label>
                 <button
                   onClick={() => void save()}
                   disabled={saving}
-                  className="rounded-lg bg-sky-600 px-5 py-2.5 font-medium text-white hover:bg-sky-500 disabled:opacity-50"
+                  className="w-full rounded-lg bg-sky-600 px-5 py-3 font-medium text-white hover:bg-sky-500 disabled:opacity-50 sm:w-auto sm:py-2.5"
                 >
                   {saving ? 'Importing…' : `Import ${result.cards.length} cards`}
                 </button>
@@ -192,32 +192,27 @@ export default function Import() {
                   ` · ${result.skipped.length} line${result.skipped.length === 1 ? '' : 's'} skipped`}
               </p>
 
+              {/*
+                A list rather than a two-column table: at phone width those
+                columns are ~150px each, which wraps rich answers into an
+                unreadable ribbon. Stacked front-then-back reads at any size.
+              */}
               <div className="overflow-hidden rounded-xl border border-ink-200 dark:border-ink-800">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-ink-100 text-xs uppercase tracking-wide text-ink-600 dark:bg-ink-900 dark:text-ink-400">
-                    <tr>
-                      <th className="px-4 py-2 font-medium">Front</th>
-                      <th className="px-4 py-2 font-medium">Back</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {result.cards.slice(0, 10).map((c, i) => (
-                      <tr key={i} className="border-t border-ink-200 dark:border-ink-800">
-                        <td className="px-4 py-2 align-top">
-                          <RichText text={c.front} html={result.html} />
-                        </td>
-                        <td className="px-4 py-2 align-top">
-                          <RichText text={c.back} html={result.html} />
-                          {c.tags.length > 0 && (
-                            <span className="mt-1 block text-xs text-ink-400">
-                              {c.tags.join(' · ')}
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <ul className="divide-y divide-ink-200 text-sm dark:divide-ink-800">
+                  {result.cards.slice(0, 10).map((c, i) => (
+                    <li key={i} className="px-4 py-3">
+                      <RichText text={c.front} html={result.html} className="font-medium" />
+                      <div className="mt-1.5 border-l-2 border-ink-200 pl-3 text-ink-600 dark:border-ink-800 dark:text-ink-400">
+                        <RichText text={c.back} html={result.html} />
+                      </div>
+                      {c.tags.length > 0 && (
+                        <span className="mt-1.5 block text-xs text-ink-400">
+                          {c.tags.join(' · ')}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
                 {result.cards.length > 10 && (
                   <p className="border-t border-ink-200 px-4 py-2 text-xs text-ink-600 dark:border-ink-800 dark:text-ink-400">
                     + {result.cards.length - 10} more
@@ -237,12 +232,12 @@ export default function Import() {
                 {result.skipped.length === 1 ? '' : 's'}
               </button>
               {showAllSkipped && (
-                <ul className="mt-2 space-y-1 rounded-xl border border-ink-200 p-4 text-sm dark:border-ink-800">
+                <ul className="mt-2 space-y-2 rounded-xl border border-ink-200 p-4 text-sm sm:space-y-1 dark:border-ink-800">
                   {result.skipped.map((s) => (
-                    <li key={s.line} className="flex gap-3">
-                      <span className="w-10 shrink-0 text-right text-ink-400">{s.line}</span>
+                    <li key={s.line} className="flex flex-wrap gap-x-3 sm:flex-nowrap">
+                      <span className="w-8 shrink-0 text-right text-ink-400 sm:w-10">{s.line}</span>
                       <code className="min-w-0 flex-1 truncate">{s.text || '(blank)'}</code>
-                      <span className="shrink-0 text-ink-600 dark:text-ink-400">
+                      <span className="ml-11 shrink-0 text-xs text-ink-600 sm:ml-0 sm:text-sm dark:text-ink-400">
                         {SKIP_REASONS[s.reason]}
                       </span>
                     </li>

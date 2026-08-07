@@ -9,6 +9,7 @@ import StateDonut from '../components/stats/StateDonut';
 import StatTiles from '../components/stats/StatTiles';
 import UpcomingChart from '../components/stats/UpcomingChart';
 import { useVizPalette } from '../lib/vizColors';
+import { useIsNarrow } from '../lib/useIsNarrow';
 import {
   formatDuration,
   perDeck,
@@ -24,6 +25,10 @@ const DAY = 86_400_000;
 
 export default function Dashboard() {
   const p = useVizPalette();
+  const narrow = useIsNarrow();
+  // 30 bars across a phone is a smear; a fortnight stays readable and tappable.
+  const reviewDays = narrow ? 14 : 30;
+  const upcomingDays = narrow ? 7 : 14;
 
   const data = useLiveQuery(async () => {
     const [cards, reviews, decks] = await Promise.all([
@@ -47,9 +52,9 @@ export default function Dashboard() {
   const hasHistory = reviews.length > 0;
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-10">
-      <header className="mb-8 flex items-center justify-between">
-        <h1 className="text-3xl font-semibold tracking-tight">Progress</h1>
+    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10">
+      <header className="mb-6 flex items-center justify-between gap-3 sm:mb-8">
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Progress</h1>
         <Link
           to="/"
           className="rounded-lg border border-ink-200 px-4 py-2 text-sm font-medium hover:bg-ink-100 dark:border-ink-800 dark:hover:bg-ink-900"
@@ -100,16 +105,16 @@ export default function Dashboard() {
             <>
               <ChartCard
                 title="Reviews per day"
-                subtitle="Last 30 days"
+                subtitle={`Last ${reviewDays} days`}
                 legend={[
                   { color: p.recalled, label: 'Recalled' },
                   { color: p.struggled, label: 'Struggled' },
                 ]}
               >
-                <ReviewsChart data={reviewsByDay(reviews, now, 30)} p={p} />
+                <ReviewsChart data={reviewsByDay(reviews, now, reviewDays)} p={p} />
               </ChartCard>
 
-              <ChartCard title="Activity" subtitle="Last 26 weeks">
+              <ChartCard title="Activity" subtitle="Last 26 weeks · scroll sideways">
                 <Heatmap data={reviewsByDay(reviews, now, 182)} p={p} />
               </ChartCard>
             </>
@@ -120,8 +125,8 @@ export default function Dashboard() {
               <StateDonut mix={stateMix(cards)} p={p} />
             </ChartCard>
 
-            <ChartCard title="Coming up" subtitle="Cards due over the next 14 days">
-              <UpcomingChart data={upcomingWorkload(cards, now, 14)} p={p} />
+            <ChartCard title="Coming up" subtitle={`Cards due over the next ${upcomingDays} days`}>
+              <UpcomingChart data={upcomingWorkload(cards, now, upcomingDays)} p={p} />
             </ChartCard>
           </div>
 
@@ -129,22 +134,23 @@ export default function Dashboard() {
             <h2 className="border-b border-ink-200 px-5 py-4 font-medium dark:border-ink-800">
               By deck
             </h2>
+            {/* Scrolls sideways on a phone rather than crushing six columns. */}
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
+              <table className="w-full text-left text-sm whitespace-nowrap">
                 <thead className="text-xs uppercase tracking-wide text-ink-400">
                   <tr>
-                    <th className="px-5 py-2 font-medium">Deck</th>
-                    <th className="px-5 py-2 text-right font-medium">Cards</th>
-                    <th className="px-5 py-2 text-right font-medium">Due</th>
-                    <th className="px-5 py-2 text-right font-medium">★</th>
-                    <th className="px-5 py-2 text-right font-medium">Retention</th>
-                    <th className="px-5 py-2 text-right font-medium">Last studied</th>
+                    <th className="px-4 py-2 font-medium sm:px-5">Deck</th>
+                    <th className="px-4 py-2 text-right font-medium sm:px-5">Cards</th>
+                    <th className="px-4 py-2 text-right font-medium sm:px-5">Due</th>
+                    <th className="px-4 py-2 text-right font-medium sm:px-5">★</th>
+                    <th className="px-4 py-2 text-right font-medium sm:px-5">Retention</th>
+                    <th className="px-4 py-2 text-right font-medium sm:px-5">Last studied</th>
                   </tr>
                 </thead>
                 <tbody className="tabular-nums">
                   {perDeck(decks, cards.filter(isLive), reviews, now).map((d) => (
                     <tr key={d.id} className="border-t border-ink-200 dark:border-ink-800">
-                      <td className="px-5 py-2.5">
+                      <td className="px-4 py-2.5 sm:px-5">
                         <Link
                           to={`/study/${d.id}`}
                           className="hover:underline"
@@ -154,13 +160,13 @@ export default function Dashboard() {
                           {d.name}
                         </Link>
                       </td>
-                      <td className="px-5 py-2.5 text-right">{d.total}</td>
-                      <td className="px-5 py-2.5 text-right">{d.due}</td>
-                      <td className="px-5 py-2.5 text-right">{d.starred || '—'}</td>
-                      <td className="px-5 py-2.5 text-right">
+                      <td className="px-4 py-2.5 text-right sm:px-5">{d.total}</td>
+                      <td className="px-4 py-2.5 text-right sm:px-5">{d.due}</td>
+                      <td className="px-4 py-2.5 text-right sm:px-5">{d.starred || '—'}</td>
+                      <td className="px-4 py-2.5 text-right sm:px-5">
                         {d.retention == null ? '—' : `${Math.round(d.retention * 100)}%`}
                       </td>
-                      <td className="px-5 py-2.5 text-right text-ink-600 dark:text-ink-400">
+                      <td className="px-4 py-2.5 text-right text-ink-600 sm:px-5 dark:text-ink-400">
                         {d.lastStudied ? relative(d.lastStudied, now) : 'never'}
                       </td>
                     </tr>

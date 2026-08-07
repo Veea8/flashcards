@@ -1,7 +1,7 @@
-import { useState } from 'react';
 import type { UpcomingDay } from '../../lib/stats';
 import type { VizPalette } from '../../lib/vizColors';
-import ChartTooltip, { type TooltipState } from './ChartTooltip';
+import ChartTooltip from './ChartTooltip';
+import { useChartTooltip } from './useChartTooltip';
 
 const W = 720;
 const H = 150;
@@ -11,7 +11,7 @@ const MAX_BAR = 24;
 
 /** Cards falling due per day. Single series, so no legend — the title says it. */
 export default function UpcomingChart({ data, p }: { data: UpcomingDay[]; p: VizPalette }) {
-  const [tip, setTip] = useState<TooltipState | null>(null);
+  const { tip, markProps, clear } = useChartTooltip();
 
   const max = Math.max(1, ...data.map((d) => d.count));
   const peak = data.reduce((a, b) => (b.count > a.count ? b : a), data[0]);
@@ -21,8 +21,13 @@ export default function UpcomingChart({ data, p }: { data: UpcomingDay[]; p: Viz
   const yOf = (v: number) => PAD_TOP + plotH - (v / max) * plotH;
 
   return (
-    <div className="relative">
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Cards due per day">
+    <div className="relative" onPointerLeave={clear}>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="w-full touch-manipulation"
+        role="img"
+        aria-label="Cards due per day"
+      >
         <line x1={0} x2={W} y1={yOf(0)} y2={yOf(0)} stroke={p.axis} strokeWidth={1} />
 
         {data.map((d, i) => {
@@ -33,19 +38,14 @@ export default function UpcomingChart({ data, p }: { data: UpcomingDay[]; p: Viz
           return (
             <g
               key={d.day}
-              onMouseEnter={() =>
-                setTip({
-                  x: (cx / W) * 100,
-                  y: ((yOf(d.count) - 6) / H) * 100,
-                  content: (
-                    <span>
-                      <strong>{d.count}</strong> card{d.count === 1 ? '' : 's'} ·{' '}
-                      {i === 0 ? 'today' : label(d.day)}
-                    </span>
-                  ),
-                })
-              }
-              onMouseLeave={() => setTip(null)}
+              {...markProps(
+                (cx / W) * 100,
+                ((yOf(d.count) - 6) / H) * 100,
+                <span>
+                  <strong>{d.count}</strong> card{d.count === 1 ? '' : 's'} ·{' '}
+                  {i === 0 ? 'today' : fullLabel(d.day)}
+                </span>,
+              )}
             >
               {d.count > 0 && (
                 <rect x={cx - barW / 2} y={yOf(d.count)} width={barW} height={h} rx={4} fill={p.single} />
@@ -78,5 +78,14 @@ export default function UpcomingChart({ data, p }: { data: UpcomingDay[]; p: Viz
 function label(day: string): string {
   return new Date(`${day}T12:00:00`).toLocaleDateString(undefined, {
     weekday: 'narrow',
+  });
+}
+
+/** The axis shows a single letter; the tooltip can afford the full date. */
+function fullLabel(day: string): string {
+  return new Date(`${day}T12:00:00`).toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
   });
 }

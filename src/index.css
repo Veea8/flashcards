@@ -22,6 +22,17 @@ html {
   color-scheme: light dark;
 }
 
+/*
+ * Keyboard shortcut hints are noise on a touch device — there is no keyboard
+ * to press. Keyed off the pointer type rather than screen width, since a
+ * small window on a laptop still has a keyboard.
+ */
+@media (pointer: coarse) {
+  .keyboard-only {
+    display: none;
+  }
+}
+
 body {
   @apply bg-ink-50 text-ink-900 antialiased;
   font-family: var(--font-sans);

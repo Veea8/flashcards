@@ -177,22 +177,22 @@ export default function Study() {
   const total = remaining + reviewed;
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-2xl flex-col px-6 py-8">
-      <header className="mb-6 flex items-center justify-between gap-4">
+    <div className="mx-auto flex min-h-[100dvh] max-w-2xl flex-col px-4 py-5 sm:px-6 sm:py-8">
+      <header className="mb-4 flex items-center justify-between gap-3 sm:mb-6">
         <button
           onClick={() => navigate('/')}
-          className="text-sm text-ink-600 hover:underline dark:text-ink-400"
+          className="min-w-0 truncate text-sm text-ink-600 hover:underline dark:text-ink-400"
         >
           ← {deck?.name ?? 'Decks'}
         </button>
-        <span className="text-sm text-ink-600 dark:text-ink-400">
+        <span className="shrink-0 text-sm whitespace-nowrap text-ink-600 dark:text-ink-400">
           {remaining} left · {reviewed} done
-          {starredOnly && ' · ★ only'}
+          {starredOnly && ' · ★'}
         </span>
       </header>
 
       {total > 0 && (
-        <div className="mb-8 h-1 overflow-hidden rounded-full bg-ink-200 dark:bg-ink-800">
+        <div className="mb-5 h-1 overflow-hidden rounded-full bg-ink-200 sm:mb-8 dark:bg-ink-800">
           <div
             className="h-full bg-sky-500 transition-all"
             style={{ width: `${(reviewed / total) * 100}%` }}
@@ -201,15 +201,15 @@ export default function Study() {
       )}
 
       {current ? (
-        <div className="flex flex-1 flex-col gap-5">
-          <div className="flex items-center justify-between">
+        <div className="flex flex-1 flex-col gap-4 sm:gap-5">
+          <div className="flex items-center justify-between gap-2">
             <CardActions
               starred={current.starred === 1}
               onToggleStar={() => void star()}
               onDelete={() => void remove()}
             />
             {current.state === 0 && (
-              <span className="rounded-full bg-ink-100 px-2.5 py-1 text-xs text-ink-600 dark:bg-ink-900 dark:text-ink-400">
+              <span className="shrink-0 rounded-full bg-ink-100 px-2.5 py-1 text-xs text-ink-600 dark:bg-ink-900 dark:text-ink-400">
                 new
               </span>
             )}
@@ -217,7 +217,7 @@ export default function Study() {
 
           <button
             onClick={reveal}
-            className="cursor-default text-left"
+            className="w-full cursor-default text-left"
             aria-label="Reveal answer"
             disabled={revealed}
           >
@@ -230,24 +230,31 @@ export default function Study() {
             />
           </button>
 
-          {revealed && intervals ? (
-            <RatingBar intervals={intervals} onRate={(r) => void rate(r)} />
-          ) : (
-            <button
-              onClick={reveal}
-              className="rounded-xl bg-sky-600 py-3 font-medium text-white hover:bg-sky-500"
-            >
-              Show answer <span className="ml-1 text-sky-200">space</span>
-            </button>
-          )}
+          {/*
+           * Pinned to the bottom of the viewport on phones so a long answer can
+           * scroll without pushing the buttons out of thumb reach. Static from
+           * sm up, where the whole card fits anyway.
+           */}
+          <div className="sticky bottom-0 -mx-4 mt-auto bg-ink-50 px-4 pt-3 pb-2 sm:static sm:mx-0 sm:bg-transparent sm:px-0 sm:pt-0 sm:pb-0 dark:bg-ink-950 dark:sm:bg-transparent">
+            {revealed && intervals ? (
+              <RatingBar intervals={intervals} onRate={(r) => void rate(r)} />
+            ) : (
+              <button
+                onClick={reveal}
+                className="w-full rounded-xl bg-sky-600 py-3.5 font-medium text-white hover:bg-sky-500"
+              >
+                Show answer <span className="keyboard-only ml-1 text-sky-200">space</span>
+              </button>
+            )}
 
-          <p className="mt-auto pt-6 text-center text-xs text-ink-400">
-            space reveal / good · 1–4 rate · S important · D delete · Z undo · esc exit
-          </p>
+            <p className="keyboard-only pt-4 text-center text-xs text-ink-400">
+              space reveal / good · 1–4 rate · S important · D delete · Z undo · esc exit
+            </p>
+          </div>
         </div>
       ) : (
         <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
-          <p className="text-2xl font-medium">
+          <p className="text-xl font-medium sm:text-2xl">
             {reviewed > 0 ? `${reviewed} cards reviewed.` : 'Nothing due right now.'}
           </p>
           <p className="text-ink-600 dark:text-ink-400">
@@ -255,24 +262,24 @@ export default function Study() {
               ? `Next card is due ${formatWhen(nextDueAt)}.`
               : 'This deck has no cards left to schedule.'}
           </p>
-          <div className="mt-2 flex gap-3">
+          <div className="mt-2 flex w-full max-w-xs flex-col gap-3 sm:w-auto sm:max-w-none sm:flex-row">
             <button
               onClick={() => navigate('/')}
-              className="rounded-lg bg-sky-600 px-5 py-2.5 font-medium text-white hover:bg-sky-500"
+              className="rounded-lg bg-sky-600 px-5 py-3 font-medium text-white hover:bg-sky-500 sm:py-2.5"
             >
               Back to decks
             </button>
             {nextDueAt && (
               <button
                 onClick={() => navigate(`/study/${deckId}?ahead=1`, { replace: true })}
-                className="rounded-lg border border-ink-200 px-5 py-2.5 font-medium hover:bg-ink-100 dark:border-ink-800 dark:hover:bg-ink-900"
+                className="rounded-lg border border-ink-200 px-5 py-3 font-medium hover:bg-ink-100 sm:py-2.5 dark:border-ink-800 dark:hover:bg-ink-900"
               >
                 Study ahead
               </button>
             )}
             <button
               onClick={() => navigate('/stats')}
-              className="rounded-lg border border-ink-200 px-5 py-2.5 font-medium hover:bg-ink-100 dark:border-ink-800 dark:hover:bg-ink-900"
+              className="rounded-lg border border-ink-200 px-5 py-3 font-medium hover:bg-ink-100 sm:py-2.5 dark:border-ink-800 dark:hover:bg-ink-900"
             >
               See progress
             </button>

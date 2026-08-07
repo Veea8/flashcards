@@ -1,7 +1,7 @@
-import { useState } from 'react';
 import type { DayCount } from '../../lib/stats';
 import type { VizPalette } from '../../lib/vizColors';
-import ChartTooltip, { type TooltipState } from './ChartTooltip';
+import ChartTooltip from './ChartTooltip';
+import { useChartTooltip } from './useChartTooltip';
 
 const CELL = 11;
 const GAP = 3;
@@ -12,7 +12,7 @@ const LABEL_W = 22;
  * chain" view. Single-hue sequential ramp; the lightest step means zero.
  */
 export default function Heatmap({ data, p }: { data: DayCount[]; p: VizPalette }) {
-  const [tip, setTip] = useState<TooltipState | null>(null);
+  const { tip, markProps, clear } = useChartTooltip();
 
   const max = Math.max(1, ...data.map((d) => d.total));
   // Pad the start so the first column begins on a Sunday.
@@ -33,14 +33,16 @@ export default function Heatmap({ data, p }: { data: DayCount[]; p: VizPalette }
   }
 
   return (
-    <div className="relative overflow-x-auto">
+    <div className="relative overflow-x-auto" onPointerLeave={clear}>
       <svg
         viewBox={`0 0 ${width} ${height}`}
         width={width}
         height={height}
         role="img"
         aria-label="Review activity by day"
-        className="max-w-full"
+        // No max-w-full: shrinking 26 weeks to fit a phone makes the squares
+        // sub-pixel. It keeps its natural size and the container scrolls.
+        className="block touch-manipulation"
       >
         {['M', 'W', 'F'].map((label, i) => (
           <text
@@ -67,22 +69,17 @@ export default function Heatmap({ data, p }: { data: DayCount[]; p: VizPalette }
               height={CELL}
               rx={2}
               fill={level(cell.total)}
-              onMouseEnter={() =>
-                setTip({
-                  x: ((LABEL_W + col * (CELL + GAP) + CELL / 2) / width) * 100,
-                  y: ((row * (CELL + GAP)) / height) * 100,
-                  content: (
-                    <span>
-                      <strong>{cell.total}</strong> review{cell.total === 1 ? '' : 's'} ·{' '}
-                      {new Date(`${cell.day}T12:00:00`).toLocaleDateString(undefined, {
-                        month: 'short',
-                        day: 'numeric',
-                      })}
-                    </span>
-                  ),
-                })
-              }
-              onMouseLeave={() => setTip(null)}
+              {...markProps(
+                ((LABEL_W + col * (CELL + GAP) + CELL / 2) / width) * 100,
+                ((row * (CELL + GAP)) / height) * 100,
+                <span>
+                  <strong>{cell.total}</strong> review{cell.total === 1 ? '' : 's'} ·{' '}
+                  {new Date(`${cell.day}T12:00:00`).toLocaleDateString(undefined, {
+                    month: 'short',
+                    day: 'numeric',
+                  })}
+                </span>,
+              )}
             />
           );
         })}

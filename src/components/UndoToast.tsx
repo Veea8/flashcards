@@ -17,11 +17,15 @@ export default function UndoToast({ message, onUndo, onDismiss, timeout = 8000 }
   return (
     <div
       role="status"
-      className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-4 rounded-xl bg-ink-900 px-5 py-3 text-sm text-ink-50 shadow-lg dark:bg-ink-100 dark:text-ink-900"
+      // Sits above the pinned rating bar on phones so it never covers it.
+      className="fixed inset-x-3 bottom-24 z-50 mx-auto flex max-w-md items-center justify-between gap-4 rounded-xl bg-ink-900 px-4 py-3 text-sm text-ink-50 shadow-lg sm:inset-x-auto sm:bottom-6 sm:left-1/2 sm:mx-0 sm:-translate-x-1/2 sm:justify-start sm:px-5 dark:bg-ink-100 dark:text-ink-900"
     >
-      <span>{message}</span>
-      <button onClick={onUndo} className="font-medium text-sky-400 hover:underline dark:text-sky-700">
-        Undo (Z)
+      <span className="min-w-0 truncate">{message}</span>
+      <button
+        onClick={onUndo}
+        className="shrink-0 font-medium text-sky-400 hover:underline dark:text-sky-700"
+      >
+        Undo<span className="keyboard-only"> (Z)</span>
       </button>
     </div>
   );

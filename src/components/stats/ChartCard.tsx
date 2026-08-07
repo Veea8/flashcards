@@ -12,7 +12,7 @@ interface Props {
 export default function ChartCard({ title, subtitle, legend, children, className }: Props) {
   return (
     <section
-      className={`rounded-xl border border-ink-200 bg-surface p-5 dark:border-ink-800 dark:bg-ink-900 ${className ?? ''}`}
+      className={`rounded-xl border border-ink-200 bg-surface p-4 sm:p-5 dark:border-ink-800 dark:bg-ink-900 ${className ?? ''}`}
     >
       <header className="mb-1 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
         <h2 className="font-medium">{title}</h2>

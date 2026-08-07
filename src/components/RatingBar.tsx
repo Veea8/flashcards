@@ -36,18 +36,18 @@ const BUTTONS: { rating: Rating; label: string; key: string; className: string }
 
 export default function RatingBar({ intervals, onRate }: Props) {
   return (
-    <div className="grid grid-cols-4 gap-2">
+    <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
       {BUTTONS.map((b) => (
         <button
           key={b.rating}
           onClick={() => onRate(b.rating)}
-          className={`rounded-xl border-2 px-3 py-3 transition ${b.className}`}
+          className={`rounded-xl border-2 px-1 py-3 transition sm:px-3 ${b.className}`}
         >
-          <span className="block font-medium">{b.label}</span>
+          <span className="block text-sm font-medium sm:text-base">{b.label}</span>
           <span className="mt-0.5 block text-xs text-ink-600 dark:text-ink-400">
             {intervals[b.rating]}
           </span>
-          <span className="mt-1 block text-[10px] text-ink-400">{b.key}</span>
+          <span className="keyboard-only mt-1 block text-[10px] text-ink-400">{b.key}</span>
         </button>
       ))}
     </div>

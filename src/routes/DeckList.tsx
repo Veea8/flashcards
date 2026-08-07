@@ -27,9 +27,9 @@ export default function DeckList() {
   if (!decks) return null;
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-10">
-      <header className="mb-8 flex items-center justify-between">
-        <h1 className="text-3xl font-semibold tracking-tight">Decks</h1>
+    <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-10">
+      <header className="mb-6 flex items-center justify-between gap-3 sm:mb-8">
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Decks</h1>
         <Link
           to="/stats"
           className="rounded-lg border border-ink-200 px-4 py-2 text-sm font-medium hover:bg-ink-100 dark:border-ink-800 dark:hover:bg-ink-900"
@@ -94,12 +94,13 @@ function DeckRow({ deck, depth, collapsed, onToggle, onDelete }: RowProps) {
     <>
       <div
         className={[
-          'flex flex-wrap items-center gap-4 rounded-xl border p-5',
+          'flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border p-4 sm:gap-4 sm:p-5',
           depth === 0
             ? 'border-ink-200 dark:border-ink-800'
             : 'border-transparent bg-ink-100/60 py-3 dark:bg-ink-900/60',
         ].join(' ')}
-        style={depth > 0 ? { marginLeft: depth * 20 } : undefined}
+        // Indentation is capped on phones so deep nesting can't squeeze the row.
+        style={depth > 0 ? { marginLeft: `min(${depth * 20}px, ${depth * 4}vw)` } : undefined}
       >
         {hasChildren ? (
           <button
@@ -114,41 +115,44 @@ function DeckRow({ deck, depth, collapsed, onToggle, onDelete }: RowProps) {
           depth > 0 && <span className="w-3 shrink-0" />
         )}
 
-        <div className="min-w-0 flex-1">
+        {/* Name and due badge share the first line; actions wrap to their own. */}
+        <div className="flex min-w-0 flex-1 basis-40 items-baseline gap-2">
           <h2 className={depth === 0 ? 'truncate text-lg font-medium' : 'truncate'}>{deck.name}</h2>
-          <p className="mt-0.5 text-sm text-ink-600 dark:text-ink-400">
-            {counts.total} card{counts.total === 1 ? '' : 's'}
-            {hasChildren && ` in ${deck.children.length} subdecks`}
-            {counts.newCards > 0 && ` · ${counts.newCards} new`}
-            {counts.starred > 0 && ` · ★ ${counts.starred}`}
-          </p>
         </div>
 
         <span
           className={
             counts.due > 0
-              ? 'rounded-full bg-sky-100 px-3 py-1 text-sm font-medium text-sky-800 dark:bg-sky-950 dark:text-sky-300'
-              : 'text-sm text-ink-400'
+              ? 'shrink-0 rounded-full bg-sky-100 px-3 py-1 text-sm font-medium text-sky-800 dark:bg-sky-950 dark:text-sky-300'
+              : 'shrink-0 text-sm text-ink-400'
           }
         >
           {counts.due > 0 ? `${counts.due} due` : 'nothing due'}
         </span>
 
-        <div className="flex gap-2">
+        <p className="w-full text-sm text-ink-600 sm:order-last sm:w-auto sm:basis-full dark:text-ink-400">
+          {counts.total} card{counts.total === 1 ? '' : 's'}
+          {hasChildren && ` in ${deck.children.length} subdecks`}
+          {counts.newCards > 0 && ` · ${counts.newCards} new`}
+          {counts.starred > 0 && ` · ★ ${counts.starred}`}
+        </p>
+
+        <div className="flex w-full gap-2 sm:w-auto">
           <Link
             to={`/study/${deck.id}`}
-            className={
+            className={[
+              'flex-1 rounded-lg px-4 py-2.5 text-center text-sm sm:flex-none sm:py-2',
               depth === 0
-                ? 'rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500'
-                : 'rounded-lg border border-ink-200 px-4 py-1.5 text-sm hover:bg-ink-100 dark:border-ink-800 dark:hover:bg-ink-950'
-            }
+                ? 'bg-sky-600 font-medium text-white hover:bg-sky-500'
+                : 'border border-ink-200 hover:bg-ink-100 dark:border-ink-800 dark:hover:bg-ink-950',
+            ].join(' ')}
           >
             Study
           </Link>
           {counts.starred > 0 && (
             <Link
               to={`/study/${deck.id}?starred=1`}
-              className="rounded-lg border border-ink-200 px-3 py-2 text-sm hover:bg-ink-100 dark:border-ink-800 dark:hover:bg-ink-950"
+              className="rounded-lg border border-ink-200 px-3 py-2.5 text-sm sm:py-2 dark:border-ink-800 dark:hover:bg-ink-950"
               title="Study starred cards only"
             >
               ★ only
@@ -156,8 +160,9 @@ function DeckRow({ deck, depth, collapsed, onToggle, onDelete }: RowProps) {
           )}
           <button
             onClick={() => onDelete(deck)}
-            className="rounded-lg border border-ink-200 px-3 py-2 text-sm text-ink-600 hover:border-rose-400 hover:text-rose-600 dark:border-ink-800 dark:text-ink-400"
+            className="rounded-lg border border-ink-200 px-3 py-2.5 text-sm text-ink-600 hover:border-rose-400 hover:text-rose-600 sm:py-2 dark:border-ink-800 dark:text-ink-400"
             title="Delete deck"
+            aria-label={`Delete ${deck.name}`}
           >
             ✕
           </button>

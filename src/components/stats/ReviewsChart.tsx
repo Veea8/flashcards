@@ -1,7 +1,7 @@
-import { useState } from 'react';
 import type { DayCount } from '../../lib/stats';
 import type { VizPalette } from '../../lib/vizColors';
-import ChartTooltip, { type TooltipState } from './ChartTooltip';
+import ChartTooltip from './ChartTooltip';
+import { useChartTooltip } from './useChartTooltip';
 
 const W = 720;
 const H = 170;
@@ -17,7 +17,7 @@ const RADIUS = 4;
  * in the tooltip rather than in the color encoding.
  */
 export default function ReviewsChart({ data, p }: { data: DayCount[]; p: VizPalette }) {
-  const [tip, setTip] = useState<TooltipState | null>(null);
+  const { tip, markProps, clear } = useChartTooltip();
 
   const max = Math.max(1, ...data.map((d) => d.total));
   const plotH = H - PAD_BOTTOM - PAD_TOP;
@@ -26,8 +26,13 @@ export default function ReviewsChart({ data, p }: { data: DayCount[]; p: VizPale
   const yOf = (v: number) => PAD_TOP + plotH - (v / max) * plotH;
 
   return (
-    <div className="relative">
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Reviews per day">
+    <div className="relative" onPointerLeave={clear}>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="w-full touch-manipulation"
+        role="img"
+        aria-label="Reviews per day"
+      >
         <line x1={0} x2={W} y1={yOf(0)} y2={yOf(0)} stroke={p.axis} strokeWidth={1} />
         <line x1={0} x2={W} y1={yOf(max)} y2={yOf(max)} stroke={p.grid} strokeWidth={1} />
         <text x={0} y={yOf(max) - 4} fontSize={10} fill={p.muted} className="tabular-nums">
@@ -51,14 +56,7 @@ export default function ReviewsChart({ data, p }: { data: DayCount[]; p: VizPale
           return (
             <g
               key={d.day}
-              onMouseEnter={() =>
-                setTip({
-                  x: (cx / W) * 100,
-                  y: ((yOf(d.total) - 6) / H) * 100,
-                  content: <TipBody d={d} />,
-                })
-              }
-              onMouseLeave={() => setTip(null)}
+              {...markProps((cx / W) * 100, ((yOf(d.total) - 6) / H) * 100, <TipBody d={d} />)}
             >
               {recalled > 0 && (
                 <rect
