@@ -117,7 +117,12 @@ function DeckRow({ deck, depth, collapsed, onToggle, onDelete }: RowProps) {
 
         {/* Name and due badge share the first line; actions wrap to their own. */}
         <div className="flex min-w-0 flex-1 basis-40 items-baseline gap-2">
-          <h2 className={depth === 0 ? 'truncate text-lg font-medium' : 'truncate'}>{deck.name}</h2>
+          <h2 className={depth === 0 ? 'min-w-0 text-lg font-medium' : 'min-w-0'}>
+            {/* The name opens the card list — the obvious place to look inside. */}
+            <Link to={`/cards?deck=${deck.id}`} className="block truncate hover:underline">
+              {deck.name}
+            </Link>
+          </h2>
         </div>
 
         <span
@@ -131,10 +136,12 @@ function DeckRow({ deck, depth, collapsed, onToggle, onDelete }: RowProps) {
         </span>
 
         <p className="w-full text-sm text-ink-600 sm:order-last sm:w-auto sm:basis-full dark:text-ink-400">
-          {counts.total} card{counts.total === 1 ? '' : 's'}
-          {hasChildren && ` in ${deck.children.length} subdecks`}
-          {counts.newCards > 0 && ` · ${counts.newCards} new`}
-          {counts.starred > 0 && ` · ★ ${counts.starred}`}
+          <Link to={`/cards?deck=${deck.id}`} className="hover:underline">
+            {counts.total} card{counts.total === 1 ? '' : 's'}
+            {hasChildren && ` in ${deck.children.length} subdecks`}
+            {counts.newCards > 0 && ` · ${counts.newCards} new`}
+            {counts.starred > 0 && ` · ★ ${counts.starred}`}
+          </Link>
         </p>
 
         <div className="flex w-full gap-2 sm:w-auto">

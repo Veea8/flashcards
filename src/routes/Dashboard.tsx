@@ -75,11 +75,17 @@ export default function Dashboard() {
         <div className="space-y-6">
           <StatTiles
             tiles={[
-              { label: 'Due now', value: String(dueNow), hint: `${cards.length} cards total` },
+              {
+                label: 'Due now',
+                value: String(dueNow),
+                hint: `${cards.length} cards total`,
+                to: '/cards?filter=due',
+              },
               {
                 label: 'Reviewed today',
                 value: String(t.reviewed),
                 hint: t.timeMs > 0 ? formatDuration(t.timeMs) : undefined,
+                to: '/cards?filter=studied',
               },
               {
                 label: 'Streak',
@@ -91,7 +97,12 @@ export default function Dashboard() {
                 value: r30 == null ? '—' : `${Math.round(r30 * 100)}%`,
                 hint: 'last 30 days',
               },
-              { label: 'Important', value: String(starred), hint: 'starred cards' },
+              {
+                label: 'Important',
+                value: String(starred),
+                hint: 'starred cards',
+                to: '/cards?filter=starred',
+              },
             ]}
           />
 
@@ -152,7 +163,7 @@ export default function Dashboard() {
                     <tr key={d.id} className="border-t border-ink-200 dark:border-ink-800">
                       <td className="px-4 py-2.5 sm:px-5">
                         <Link
-                          to={`/study/${d.id}`}
+                          to={`/cards?deck=${d.id}`}
                           className="hover:underline"
                           style={d.depth > 0 ? { marginLeft: d.depth * 16 } : undefined}
                         >

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { Card, Rating, ReviewLog } from '../db/schema';
 import {
   dayKey,
+  dayStart,
   formatDuration,
   perDeck,
   retention,
@@ -65,6 +66,23 @@ describe('dayKey', () => {
 
   it('puts an evening session on the same day', () => {
     expect(dayKey(at(2026, 3, 10, 22, 0))).toBe('2026-03-10');
+  });
+});
+
+describe('dayStart', () => {
+  it('is 4am of the day an evening session belongs to', () => {
+    expect(dayStart(at(2026, 3, 10, 22, 0))).toBe(at(2026, 3, 10, 4, 0));
+  });
+
+  it('reaches back to yesterday 4am for a 1am session', () => {
+    expect(dayStart(at(2026, 3, 10, 1, 30))).toBe(at(2026, 3, 9, 4, 0));
+  });
+
+  it('agrees with dayKey on which study day a moment falls in', () => {
+    for (const hour of [0, 3, 4, 5, 12, 23]) {
+      const ts = at(2026, 3, 10, hour);
+      expect(dayKey(dayStart(ts))).toBe(dayKey(ts));
+    }
   });
 });
 

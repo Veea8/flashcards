@@ -9,15 +9,19 @@ import { db } from './db';
 import {
   addCardsToDeck,
   applyReview,
+  browseCards,
   createDeckFromCards,
   deleteDeck,
+  fsrsStateOf,
   getAllLiveCards,
   getAllReviews,
   getDueCards,
   getNextDueAt,
+  getReviewsSince,
   importDeckTree,
   listDeckTree,
   restoreCard,
+  revertReview,
   softDeleteCard,
   subtreeIds,
   toggleStar,
@@ -103,6 +107,99 @@ describe('reviewing', () => {
     const easy = gradeCard(card, 4, now).due;
     expect(good).toBeGreaterThan(hard);
     expect(easy).toBeGreaterThan(good);
+  });
+});
+
+describe('undoing a review', () => {
+  it('restores the exact schedule and drops the log', async () => {
+    const deckId = await createDeckFromCards('French', PAIRS);
+    const [card] = await getDueCards(deckId);
+    const now = Date.now();
+
+    const logId = await applyReview(card.id, gradeCard(card, 1, now), {
+      rating: 1,
+      reviewedAt: now,
+      state: card.state,
+      durationMs: 1000,
+    });
+    expect(logId).toBeTypeOf('string');
+
+    await revertReview(card.id, fsrsStateOf(card), logId);
+
+    const back = (await db.cards.get(card.id))!;
+    expect(back).toMatchObject({
+      due: card.due,
+      state: card.state,
+      reps: card.reps,
+      lapses: card.lapses,
+      stability: card.stability,
+    });
+    // A first review must leave no trace: last_review is cleared, not stale.
+    expect(back.last_review).toBeUndefined();
+    expect(await getAllReviews()).toHaveLength(0);
+  });
+
+  it('undoes only the last of several reviews', async () => {
+    const deckId = await createDeckFromCards('French', PAIRS);
+    const cards = await getDueCards(deckId);
+    const now = Date.now();
+
+    for (const c of cards.slice(0, 2)) {
+      await applyReview(c.id, gradeCard(c, 3, now), {
+        rating: 3,
+        reviewedAt: now,
+        state: c.state,
+        durationMs: 500,
+      });
+    }
+    const last = cards[1];
+    const logs = await getAllReviews();
+    await revertReview(last.id, fsrsStateOf(last), logs[1].id);
+
+    expect(await getAllReviews()).toHaveLength(1);
+    expect((await db.cards.get(last.id))!.state).toBe(0);
+    expect((await db.cards.get(cards[0].id))!.state).not.toBe(0);
+  });
+});
+
+describe('browsing', () => {
+  it('returns deleted cards too, scoped to the deck subtree', async () => {
+    const rootId = await importDeckTree('AW', [
+      { path: [], cards: [{ front: 'loose', back: 'x' }] },
+      { path: ['Graphs'], cards: [{ front: 'g1', back: 'c' }] },
+    ]);
+    await createDeckFromCards('Other', [{ front: 'z', back: 'y' }]);
+
+    const [card] = await getDueCards(rootId);
+    await softDeleteCard(card.id);
+
+    const inTree = await browseCards(rootId);
+    expect(inTree.map((c) => c.front).sort()).toEqual(['g1', 'loose']);
+    expect(inTree.filter((c) => c.deletedAt != null)).toHaveLength(1);
+    expect(await browseCards()).toHaveLength(3);
+  });
+
+  it('finds the reviews from a given moment onwards', async () => {
+    const deckId = await createDeckFromCards('French', PAIRS);
+    const cards = await getDueCards(deckId);
+    const now = Date.now();
+    const yesterday = now - 86_400_000;
+
+    await applyReview(cards[0].id, gradeCard(cards[0], 3, yesterday), {
+      rating: 3,
+      reviewedAt: yesterday,
+      state: 0,
+      durationMs: 500,
+    });
+    await applyReview(cards[1].id, gradeCard(cards[1], 3, now), {
+      rating: 3,
+      reviewedAt: now,
+      state: 0,
+      durationMs: 500,
+    });
+
+    const recent = await getReviewsSince(now - 3_600_000);
+    expect(recent.map((r) => r.cardId)).toEqual([cards[1].id]);
   });
 });
 

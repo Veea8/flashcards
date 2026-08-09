@@ -221,24 +221,64 @@ export async function getNextDueAt(deckId: string, now = Date.now()): Promise<nu
   return future.length ? Math.min(...future) : null;
 }
 
-/** Persist a graded review: update the card and append its log atomically. */
+/**
+ * The scheduling fields of a card, with every key present — `last_review` is
+ * spelled out even when undefined so that writing this back through
+ * `db.cards.update` clears it rather than leaving a stale value behind.
+ */
+export function fsrsStateOf(card: Card): FsrsState {
+  return {
+    due: card.due,
+    stability: card.stability,
+    difficulty: card.difficulty,
+    elapsed_days: card.elapsed_days,
+    scheduled_days: card.scheduled_days,
+    learning_steps: card.learning_steps,
+    reps: card.reps,
+    lapses: card.lapses,
+    state: card.state,
+    last_review: card.last_review,
+  };
+}
+
+/**
+ * Persist a graded review: update the card and append its log atomically.
+ * Returns the log id, which is what makes the review undoable.
+ */
 export async function applyReview(
   cardId: string,
   updated: FsrsState,
   log: { rating: Rating; reviewedAt: number; state: ReviewLog['state']; durationMs: number },
-): Promise<void> {
-  await db.transaction('rw', db.cards, db.reviews, async () => {
+): Promise<string | null> {
+  const logId = newId();
+  return db.transaction('rw', db.cards, db.reviews, async () => {
     const card = await db.cards.get(cardId);
-    if (!card) return;
+    if (!card) return null;
     // Cast: Dexie's UpdateSpec expands array fields into dotted key paths,
     // which a plain FsrsState (no array fields at all) can't satisfy.
     await db.cards.update(cardId, updated as UpdateSpec<Card>);
     await db.reviews.add({
-      id: newId(),
+      id: logId,
       cardId,
       deckId: card.deckId,
       ...log,
     });
+    return logId;
+  });
+}
+
+/**
+ * Undo a review: put the card's scheduling back exactly as it was and drop the
+ * log row, so the review never happened as far as the dashboard is concerned.
+ */
+export async function revertReview(
+  cardId: string,
+  previous: FsrsState,
+  logId: string | null,
+): Promise<void> {
+  await db.transaction('rw', db.cards, db.reviews, async () => {
+    await db.cards.update(cardId, previous as UpdateSpec<Card>);
+    if (logId) await db.reviews.delete(logId);
   });
 }
 
@@ -275,4 +315,25 @@ export async function getAllLiveCards(): Promise<Card[]> {
 
 export async function getAllReviews(): Promise<ReviewLog[]> {
   return db.reviews.orderBy('reviewedAt').toArray();
+}
+
+export async function getReviewsSince(since: number): Promise<ReviewLog[]> {
+  return db.reviews.where('reviewedAt').aboveOrEqual(since).toArray();
+}
+
+/**
+ * Every card in a deck subtree (or in every deck when no id is given),
+ * **including soft-deleted ones** — the browser needs them for its "deleted"
+ * filter and to offer restore.
+ */
+export async function browseCards(deckId?: string): Promise<Card[]> {
+  if (!deckId) return db.cards.toArray();
+  const ids = await subtreeIds(deckId);
+  return db.cards.where('deckId').anyOf(ids).toArray();
+}
+
+/** Deck id -> name, for labelling cards that came from a subdeck. */
+export async function deckNames(): Promise<Map<string, string>> {
+  const decks = await db.decks.toArray();
+  return new Map(decks.map((d) => [d.id, d.name]));
 }

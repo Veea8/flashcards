@@ -7,10 +7,12 @@ import UndoToast from '../components/UndoToast';
 import type { Card, Deck, Rating } from '../db/schema';
 import {
   applyReview,
+  fsrsStateOf,
   getDeck,
   getDueCards,
   getNextDueAt,
   restoreCard,
+  revertReview,
   softDeleteCard,
   toggleStar,
 } from '../db/repo';
@@ -29,6 +31,18 @@ function insertByDue(queue: Card[], card: Card): Card[] {
   return next;
 }
 
+/**
+ * One reversible step of the session. The whole queue is snapshotted rather
+ * than the position of the affected card: restoring it puts you back on the
+ * exact card you were looking at, in the exact order, with no bookkeeping.
+ */
+type Step =
+  | { kind: 'review'; card: Card; logId: string | null; queue: Card[]; reviewed: number }
+  | { kind: 'delete'; card: Card; queue: Card[]; reviewed: number };
+
+/** Steps kept for undo. Deep history isn't useful; a few mistakes back is. */
+const HISTORY_LIMIT = 20;
+
 export default function Study() {
   const { deckId = '' } = useParams();
   const [params] = useSearchParams();
@@ -42,7 +56,8 @@ export default function Study() {
   const [revealed, setRevealed] = useState(false);
   const [revealedAt, setRevealedAt] = useState<number | null>(null);
   const [reviewed, setReviewed] = useState(0);
-  const [deleted, setDeleted] = useState<{ card: Card; index: number } | null>(null);
+  const [deleted, setDeleted] = useState<Card | null>(null);
+  const [history, setHistory] = useState<Step[]>([]);
   const [nextDueAt, setNextDueAt] = useState<number | null>(null);
 
   useEffect(() => {
@@ -56,6 +71,7 @@ export default function Study() {
       setDeck(d ?? null);
       setQueue(cards);
       setReviewed(0);
+      setHistory([]);
     })();
     return () => {
       cancelled = true;
@@ -81,19 +97,26 @@ export default function Study() {
     setRevealedAt(Date.now());
   }, [revealed]);
 
+  /** Records a reversible step. The toast is dropped so undo can't mislead. */
+  const pushStep = useCallback((step: Step) => {
+    setHistory((h) => [...h, step].slice(-HISTORY_LIMIT));
+    setDeleted(step.kind === 'delete' ? step.card : null);
+  }, []);
+
   const rate = useCallback(
     async (rating: Rating) => {
-      if (!current || !revealed) return;
+      if (!current || !revealed || !queue) return;
       const now = Date.now();
       const updated = gradeCard(current, rating, now);
 
-      await applyReview(current.id, updated, {
+      const logId = await applyReview(current.id, updated, {
         rating,
         reviewedAt: now,
         state: current.state,
         durationMs: revealedAt ? now - revealedAt : 0,
       });
 
+      pushStep({ kind: 'review', card: current, logId, queue, reviewed });
       setQueue((q) => {
         if (!q) return q;
         const rest = q.slice(1);
@@ -104,7 +127,7 @@ export default function Study() {
       setRevealed(false);
       setRevealedAt(null);
     },
-    [current, revealed, revealedAt],
+    [current, queue, revealed, revealedAt, reviewed, pushStep],
   );
 
   const star = useCallback(async () => {
@@ -113,37 +136,47 @@ export default function Study() {
     setQueue((q) => (q ? [{ ...q[0], starred: next }, ...q.slice(1)] : q));
   }, [current]);
 
-  /** Soft delete, no confirm dialog — the undo toast is the safety net. */
+  /** Soft delete, no confirm dialog — undo is the safety net. */
   const remove = useCallback(async () => {
-    if (!current) return;
+    if (!current || !queue) return;
     await softDeleteCard(current.id);
+    pushStep({ kind: 'delete', card: current, queue, reviewed });
     setQueue((q) => (q ? q.slice(1) : q));
-    setDeleted({ card: current, index: 0 });
     setRevealed(false);
     setRevealedAt(null);
-  }, [current]);
+  }, [current, queue, reviewed, pushStep]);
 
-  const undoDelete = useCallback(async () => {
-    if (!deleted) return;
-    await restoreCard(deleted.card.id);
-    setQueue((q) => {
-      if (!q) return q;
-      const next = [...q];
-      next.splice(deleted.index, 0, deleted.card);
-      return next;
-    });
+  /**
+   * Steps back one card: un-rates or un-deletes it in the database and puts
+   * the session exactly where it was. A rating comes back revealed, since the
+   * reason to go back is almost always to answer it differently.
+   */
+  const undo = useCallback(async () => {
+    const last = history[history.length - 1];
+    if (!last) return;
+
+    if (last.kind === 'review') {
+      await revertReview(last.card.id, fsrsStateOf(last.card), last.logId);
+    } else {
+      await restoreCard(last.card.id);
+    }
+
+    setHistory((h) => h.slice(0, -1));
+    setQueue(last.queue);
+    setReviewed(last.reviewed);
     setDeleted(null);
-    setRevealed(false);
-  }, [deleted]);
+    setRevealed(last.kind === 'review');
+    setRevealedAt(last.kind === 'review' ? Date.now() : null);
+  }, [history]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const key = e.key.toLowerCase();
 
-      if (key === 'z' && deleted) {
+      if ((key === 'z' || key === 'backspace') && history.length > 0) {
         e.preventDefault();
-        void undoDelete();
+        void undo();
         return;
       }
       if (key === 'escape') {
@@ -169,7 +202,7 @@ export default function Study() {
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [current, revealed, deleted, rate, reveal, star, remove, undoDelete, navigate]);
+  }, [current, revealed, history, rate, reveal, star, remove, undo, navigate]);
 
   if (!queue) return null;
 
@@ -247,9 +280,21 @@ export default function Study() {
               </button>
             )}
 
-            <p className="keyboard-only pt-4 text-center text-xs text-ink-400">
-              space reveal / good · 1–4 rate · S important · D delete · Z undo · esc exit
-            </p>
+            {/* Undo lives with the rating buttons: on a phone that is the only
+                part of the screen a thumb reaches without a stretch. */}
+            <div className="flex flex-col items-center gap-2 pt-3">
+              {history.length > 0 && (
+                <button
+                  onClick={() => void undo()}
+                  className="rounded-lg px-3 py-2 text-sm text-ink-600 hover:bg-ink-100 dark:text-ink-400 dark:hover:bg-ink-900"
+                >
+                  ↶ Back to previous card
+                </button>
+              )}
+              <p className="keyboard-only text-center text-xs text-ink-400">
+                space reveal / good · 1–4 rate · S important · D delete · Z back · esc exit
+              </p>
+            </div>
           </div>
         </div>
       ) : (
@@ -263,6 +308,14 @@ export default function Study() {
               : 'This deck has no cards left to schedule.'}
           </p>
           <div className="mt-2 flex w-full max-w-xs flex-col gap-3 sm:w-auto sm:max-w-none sm:flex-row">
+            {history.length > 0 && (
+              <button
+                onClick={() => void undo()}
+                className="rounded-lg border border-ink-200 px-5 py-3 font-medium hover:bg-ink-100 sm:py-2.5 dark:border-ink-800 dark:hover:bg-ink-900"
+              >
+                ↶ Last card
+              </button>
+            )}
             <button
               onClick={() => navigate('/')}
               className="rounded-lg bg-sky-600 px-5 py-3 font-medium text-white hover:bg-sky-500 sm:py-2.5"
@@ -289,8 +342,8 @@ export default function Study() {
 
       {deleted && (
         <UndoToast
-          message={`Deleted "${truncate(deleted.card.front)}"`}
-          onUndo={() => void undoDelete()}
+          message={`Deleted "${truncate(deleted.front)}"`}
+          onUndo={() => void undo()}
           onDismiss={() => setDeleted(null)}
         />
       )}

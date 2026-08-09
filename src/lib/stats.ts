@@ -21,6 +21,14 @@ export function dayKey(ts: number, cutoffHour = DAY_CUTOFF_HOUR): string {
   return `${y}-${m}-${day}`;
 }
 
+/** Epoch ms at which the study day containing `ts` began. */
+export function dayStart(ts: number, cutoffHour = DAY_CUTOFF_HOUR): number {
+  const d = new Date(ts);
+  d.setHours(d.getHours() - cutoffHour);
+  d.setHours(cutoffHour, 0, 0, 0);
+  return d.getTime();
+}
+
 /** Sequence of day keys ending at `end`, inclusive, oldest first. */
 export function dayKeysEnding(end: number, count: number, cutoffHour = DAY_CUTOFF_HOUR): string[] {
   const keys: string[] = [];
