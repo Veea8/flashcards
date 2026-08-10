@@ -3,6 +3,7 @@
  * function takes plain arrays so it can be unit-tested with synthetic data.
  */
 import type { Card, CardState, Deck, Rating, ReviewLog } from '../db/schema';
+import { byName } from './order';
 
 /**
  * Study days start at 4am, so a session that runs past midnight still counts
@@ -239,7 +240,7 @@ export function perDeck(
       lastStudied: logs.length ? Math.max(...logs.map((r) => r.reviewedAt)) : null,
     });
 
-    for (const kid of [...kids].sort((a, b) => a.name.localeCompare(b.name))) {
+    for (const kid of [...kids].sort((a, b) => byName(a.name, b.name))) {
       walk(kid, depth + 1);
     }
   };

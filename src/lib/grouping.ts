@@ -3,6 +3,7 @@
  * previews the result before anything is written.
  */
 import type { ParsedPair } from './parseTxt';
+import { byName } from './order';
 
 export type GroupSource = 'deck' | 'tag' | null;
 
@@ -121,7 +122,9 @@ export function groupCards(cards: ParsedPair[], source: GroupSource): Grouping {
     return { key, path, name: path[path.length - 1] ?? key, cards: buckets.get(key)! };
   });
 
-  groups.sort((a, b) => b.cards.length - a.cards.length);
+  // Tags like Topic_02 / Topic_10 come from a course in sequence, and the
+  // preview should read the way the course does.
+  groups.sort((a, b) => byName(a.name, b.name));
   return { source, groups, ungrouped };
 }
 

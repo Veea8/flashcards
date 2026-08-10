@@ -63,12 +63,18 @@ describe('groupCards by tag', () => {
     card('d'), // untagged
   ];
 
-  it('buckets by the first tag, largest group first', () => {
+  it('buckets by the first tag, in name order', () => {
     const g = groupCards(cards, 'tag');
     expect(g.groups.map((x) => [x.name, x.cards.length])).toEqual([
-      ['Probability', 2],
       ['Cycles', 1],
+      ['Probability', 2],
     ]);
+  });
+
+  it('orders numbered topics the way the course runs, not as text', () => {
+    const numbered = ['Topic_10_Late', 'Topic_2_Early', 'Topic_1_First'].map((t) => card(t, [t]));
+    const g = groupCards(numbered, 'tag');
+    expect(g.groups.map((x) => x.name)).toEqual(['1 First', '2 Early', '10 Late']);
   });
 
   it('leaves untagged cards for the parent deck', () => {

@@ -340,9 +340,9 @@ describe('subdecks', () => {
     expect(root.rollup.total).toBe(3); // but its subtree does
     expect(root.rollup.due).toBe(3);
 
-    // Biggest subdeck first.
-    expect(root.children.map((c) => c.name)).toEqual(['Probability', 'Graphs']);
-    expect(root.children[0].rollup.total).toBe(2);
+    // Name order, not size order.
+    expect(root.children.map((c) => c.name)).toEqual(['Graphs', 'Probability']);
+    expect(root.children[1].rollup.total).toBe(2);
     expect(root.children.every((c) => c.parentId === rootId)).toBe(true);
   });
 

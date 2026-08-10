@@ -2,6 +2,7 @@ import type { UpdateSpec } from 'dexie';
 import { db, newId } from './db';
 import type { Card, Deck, FsrsState, Rating, ReviewLog } from './schema';
 import { newCardState } from '../lib/scheduler';
+import { byName } from '../lib/order';
 
 /** A card is live unless it has been soft-deleted. */
 export const isLive = (c: Card) => c.deletedAt == null;
@@ -181,7 +182,9 @@ export async function listDeckTree(now = Date.now()): Promise<DeckNode[]> {
   }
 
   const rollup = (node: DeckNode): DeckCounts => {
-    node.children.sort((a, b) => b.rollup.total - a.rollup.total || a.name.localeCompare(b.name));
+    // By name, numerically: a course deck's "Topic 2" belongs before "Topic 10",
+    // and lecture order matters more than which subdeck happens to be biggest.
+    node.children.sort((a, b) => byName(a.name, b.name));
     for (const child of node.children) node.rollup = addCounts(node.rollup, rollup(child));
     return node.rollup;
   };
