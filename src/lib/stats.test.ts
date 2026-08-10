@@ -134,6 +134,25 @@ describe('retention', () => {
     const reviews = [log(now - 40 * DAY, 1), log(now, 3), log(now, 3)];
     expect(retention(reviews, now - 30 * DAY)).toBe(1);
   });
+
+  it('ignores cram answers, which say nothing about the schedule', () => {
+    const graded = [log(1, 3), log(2, 3)];
+    const crammed = [{ ...log(3, 1), mode: 'cram' as const }, { ...log(4, 1), mode: 'cram' as const }];
+    expect(retention([...graded, ...crammed])).toBe(1);
+    // ...but a session made entirely of cram has nothing to report.
+    expect(retention(crammed)).toBeNull();
+  });
+});
+
+describe('cram in the volume stats', () => {
+  it('still counts as study for the day and the heatmap', () => {
+    const now = at(2026, 3, 10, 12);
+    const reviews = [{ ...log(now, 1, 3000), mode: 'cram' as const }, log(now, 3, 2000)];
+
+    expect(today(reviews, now)).toEqual({ reviewed: 2, timeMs: 5000 });
+    expect(reviewsByDay(reviews, now, 1)[0].total).toBe(2);
+    expect(streaks(reviews, now).current).toBe(1);
+  });
 });
 
 describe('reviewsByDay', () => {

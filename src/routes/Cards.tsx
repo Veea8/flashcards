@@ -137,12 +137,20 @@ export default function Cards() {
           </h1>
         </div>
         {deckId && (
-          <Link
-            to={`/study/${deckId}`}
-            className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500"
-          >
-            Study
-          </Link>
+          <div className="flex gap-2">
+            <Link
+              to={`/study/${deckId}`}
+              className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500"
+            >
+              Study
+            </Link>
+            <Link
+              to={`/cram/${deckId}`}
+              className="rounded-lg border border-violet-300 px-4 py-2 text-sm font-medium text-violet-700 hover:bg-violet-50 dark:border-violet-900 dark:text-violet-300 dark:hover:bg-violet-950/50"
+            >
+              Cram
+            </Link>
+          </div>
         )}
       </header>
 

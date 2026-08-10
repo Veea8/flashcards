@@ -58,6 +58,11 @@ export interface ReviewLog {
   state: CardState;
   /** Time from reveal to rating, in ms. Feeds "time studied". */
   durationMs: number;
+  /**
+   * Cram answers are logged so the work shows up as work, but they are not
+   * scheduler feedback: absent (the default) means a normal graded review.
+   */
+  mode?: 'cram';
 }
 
 export const RATING_LABELS: Record<Rating, string> = {

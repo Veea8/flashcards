@@ -282,6 +282,29 @@ export async function revertReview(
   });
 }
 
+/**
+ * Records a cram answer. Deliberately writes no card fields: cramming must not
+ * move a card's due date, or a week of drilling would flatten the schedule you
+ * still want after the exam.
+ */
+export async function logCramAnswer(
+  card: Card,
+  correct: boolean,
+  durationMs: number,
+  at = Date.now(),
+): Promise<void> {
+  await db.reviews.add({
+    id: newId(),
+    cardId: card.id,
+    deckId: card.deckId,
+    rating: correct ? 3 : 1,
+    reviewedAt: at,
+    state: card.state,
+    durationMs,
+    mode: 'cram',
+  });
+}
+
 export async function toggleStar(cardId: string): Promise<0 | 1> {
   const card = await db.cards.get(cardId);
   if (!card) return 0;

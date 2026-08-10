@@ -1,5 +1,6 @@
 import { Route, Routes } from 'react-router';
 import Cards from './routes/Cards';
+import Cram from './routes/Cram';
 import DeckList from './routes/DeckList';
 import Import from './routes/Import';
 import Study from './routes/Study';
@@ -12,6 +13,7 @@ export default function App() {
       <Route path="/import" element={<Import />} />
       <Route path="/cards" element={<Cards />} />
       <Route path="/study/:deckId" element={<Study />} />
+      <Route path="/cram/:deckId" element={<Cram />} />
       <Route path="/stats" element={<Dashboard />} />
     </Routes>
   );

@@ -156,6 +156,15 @@ function DeckRow({ deck, depth, collapsed, onToggle, onDelete }: RowProps) {
           >
             Study
           </Link>
+          {counts.total > 0 && (
+            <Link
+              to={`/cram/${deck.id}`}
+              className="flex-1 rounded-lg border border-violet-300 px-4 py-2.5 text-center text-sm text-violet-700 hover:bg-violet-50 sm:flex-none sm:py-2 dark:border-violet-900 dark:text-violet-300 dark:hover:bg-violet-950/50"
+              title="Drill this deck in sets of six, ignoring due dates"
+            >
+              Cram
+            </Link>
+          )}
           {counts.starred > 0 && (
             <Link
               to={`/study/${deck.id}?starred=1`}

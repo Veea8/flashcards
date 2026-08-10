@@ -115,9 +115,15 @@ export function streaks(
   return { current, longest: Math.max(longest, current) };
 }
 
-/** Share of reviews rated Good or Easy, over the given window. Null if no data. */
+/**
+ * Share of reviews rated Good or Easy, over the given window. Null if no data.
+ *
+ * Cram answers are excluded: retention measures whether the scheduler picked
+ * the right interval, and a card you drilled four times in one sitting says
+ * nothing about that. Cram still counts everywhere else — it was real study.
+ */
 export function retention(reviews: ReviewLog[], since = 0): number | null {
-  const window = reviews.filter((r) => r.reviewedAt >= since);
+  const window = reviews.filter((r) => r.mode !== 'cram' && r.reviewedAt >= since);
   if (window.length === 0) return null;
   const recalled = window.filter((r) => r.rating >= 3).length;
   return recalled / window.length;

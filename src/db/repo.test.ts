@@ -20,6 +20,7 @@ import {
   getReviewsSince,
   importDeckTree,
   listDeckTree,
+  logCramAnswer,
   restoreCard,
   revertReview,
   softDeleteCard,
@@ -159,6 +160,26 @@ describe('undoing a review', () => {
     expect(await getAllReviews()).toHaveLength(1);
     expect((await db.cards.get(last.id))!.state).toBe(0);
     expect((await db.cards.get(cards[0].id))!.state).not.toBe(0);
+  });
+});
+
+describe('cram answers', () => {
+  it('are logged without moving the card an inch', async () => {
+    const deckId = await createDeckFromCards('French', PAIRS);
+    const [card] = await getDueCards(deckId);
+
+    await logCramAnswer(card, false, 1500);
+    await logCramAnswer(card, true, 900);
+
+    const after = (await db.cards.get(card.id))!;
+    expect(after).toMatchObject({ due: card.due, state: card.state, reps: 0, lapses: 0 });
+    expect(after.last_review).toBeUndefined();
+
+    const logs = await getAllReviews();
+    expect(logs.map((r) => r.mode)).toEqual(['cram', 'cram']);
+    expect(logs.map((r) => r.rating)).toEqual([1, 3]);
+    // The deck still has all three cards waiting for a real review.
+    expect(await getDueCards(deckId)).toHaveLength(3);
   });
 });
 

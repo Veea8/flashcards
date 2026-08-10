@@ -322,6 +322,13 @@ export default function Study() {
             >
               Back to decks
             </button>
+            {/* The natural next move when nothing is due and an exam is close. */}
+            <button
+              onClick={() => navigate(`/cram/${deckId}`)}
+              className="rounded-lg border border-violet-300 px-5 py-3 font-medium text-violet-700 hover:bg-violet-50 sm:py-2.5 dark:border-violet-900 dark:text-violet-300 dark:hover:bg-violet-950/50"
+            >
+              Cram this deck
+            </button>
             {nextDueAt && (
               <button
                 onClick={() => navigate(`/study/${deckId}?ahead=1`, { replace: true })}
