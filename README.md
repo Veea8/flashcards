@@ -55,7 +55,9 @@ subdecks nested under one parent — an 11-tag Anki export becomes a parent deck
 11 children. You can untick any group (its cards fall back to the parent) or turn
 the split off entirely.
 
-Grouping uses the deck name if there is one, otherwise the card's **first** tag; a
+Grouping uses deck names when they actually divide the file — a single `#deck:` line
+names the whole export rather than splitting it, so in that case the tags are used
+instead and the deck name becomes the parent's. Otherwise it's the card's **first** tag; a
 card lands in exactly one subdeck, since duplicating it would schedule the same
 material several times over. A shared prefix is trimmed from the names, so
 `AW_Probability` and `AW_Cycles` become `Probability` and `Cycles`. Anki's `::`

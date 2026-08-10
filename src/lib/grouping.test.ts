@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import type { ParsedPair } from './parseTxt';
-import { deckNameFromFile, detectSource, groupCards, shortenNames } from './grouping';
+import {
+  deckNameFromFile,
+  detectSource,
+  groupCards,
+  shortenNames,
+  singleDeckName,
+} from './grouping';
 
 const card = (front: string, tags: string[] = [], deck?: string): ParsedPair => ({
   front,
@@ -10,6 +16,11 @@ const card = (front: string, tags: string[] = [], deck?: string): ParsedPair => 
 });
 
 describe('detectSource', () => {
+  it('prefers deck names over tags when they actually divide the file', () => {
+    const cards = [card('a', ['t1'], 'Deck A'), card('b', ['t2'], 'Deck B')];
+    expect(detectSource(cards)).toBe('deck');
+  });
+
   it('prefers an explicit deck name over tags', () => {
     expect(detectSource([card('a', ['t'], 'Deck A')])).toBe('deck');
   });
@@ -20,6 +31,27 @@ describe('detectSource', () => {
 
   it('reports nothing to group by when neither is present', () => {
     expect(detectSource([card('a')])).toBeNull();
+  });
+
+  it('groups by tag when one #deck: line names the whole file', () => {
+    // The shape of an Anki export: every card carries the same deck name, and
+    // the topic tags are the only thing that separates them.
+    const cards = [
+      card('a', ['Topic_01'], 'Parallel Programming'),
+      card('b', ['Topic_01'], 'Parallel Programming'),
+      card('c', ['Topic_02'], 'Parallel Programming'),
+    ];
+    expect(detectSource(cards)).toBe('tag');
+    expect(singleDeckName(cards)).toBe('Parallel Programming');
+
+    const g = groupCards(cards, detectSource(cards));
+    expect(g.groups.map((x) => x.name)).toEqual(['01', '02']);
+    expect(g.groups[0].cards).toHaveLength(2);
+  });
+
+  it('has no single deck name when the file names several', () => {
+    expect(singleDeckName([card('a', [], 'A'), card('b', [], 'B')])).toBeNull();
+    expect(singleDeckName([card('a')])).toBeNull();
   });
 });
 

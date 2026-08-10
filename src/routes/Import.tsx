@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router';
 import Dropzone from '../components/Dropzone';
 import RichText from '../components/RichText';
 import { parseTxt } from '../lib/parseTxt';
-import { deckNameFromFile, detectSource, groupCards } from '../lib/grouping';
+import { deckNameFromFile, detectSource, groupCards, singleDeckName } from '../lib/grouping';
 import { importDeckTree } from '../db/repo';
 
 const SKIP_REASONS: Record<string, string> = {
@@ -30,7 +30,8 @@ export default function Import() {
 
   function handleFile(name: string, text: string) {
     setFile({ name, text });
-    setDeckName(deckNameFromFile(name));
+    // A file that names its own deck knows better than the filename does.
+    setDeckName(singleDeckName(parseTxt(text).cards) ?? deckNameFromFile(name));
     setShowAllSkipped(false);
     setSplit(true);
     setExcluded(new Set());

@@ -34,10 +34,28 @@ function keyOf(card: ParsedPair, source: GroupSource): string | null {
   return null;
 }
 
+/**
+ * What to split on. Deck names win over tags — but only if they actually
+ * divide the file: an Anki export with a single `#deck:` line names the whole
+ * deck rather than grouping it, and its tags are the real structure.
+ */
 export function detectSource(cards: ParsedPair[]): GroupSource {
-  if (cards.some((c) => c.deck?.trim())) return 'deck';
-  if (cards.some((c) => c.tags.length > 0)) return 'tag';
-  return null;
+  const decks = new Set(cards.map((c) => c.deck?.trim()).filter(Boolean));
+  if (decks.size > 1) return 'deck';
+
+  const tags = new Set(cards.map((c) => c.tags[0]).filter(Boolean));
+  if (tags.size > 1) return 'tag';
+
+  // Neither divides anything; report whichever exists so the caller can still
+  // label the single group.
+  if (decks.size === 1) return 'deck';
+  return tags.size === 1 ? 'tag' : null;
+}
+
+/** The one deck name a file gives to all of its cards, if it does. */
+export function singleDeckName(cards: ParsedPair[]): string | null {
+  const decks = new Set(cards.map((c) => c.deck?.trim()).filter(Boolean));
+  return decks.size === 1 ? [...decks][0]! : null;
 }
 
 /**
