@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie';
-import type { Card, Deck, ReviewLog } from './schema';
+import type { Card, CramSession, Deck, ReviewLog } from './schema';
 
 /**
  * Note on `deletedAt`: IndexedDB skips records whose indexed key is undefined,
@@ -11,6 +11,7 @@ export const db = new Dexie('flashcards') as Dexie & {
   decks: EntityTable<Deck, 'id'>;
   cards: EntityTable<Card, 'id'>;
   reviews: EntityTable<ReviewLog, 'id'>;
+  cram: EntityTable<CramSession, 'deckId'>;
 };
 
 db.version(1).stores({
@@ -43,6 +44,15 @@ db.version(3).stores({
   decks: 'id, name, createdAt, parentId',
   cards: 'id, deckId, due, starred, *tags, [deckId+due], [deckId+starred]',
   reviews: 'id, cardId, deckId, reviewedAt',
+});
+
+// v4 stores an in-flight cram run per deck, so closing the tab after a set
+// doesn't hand you the same six cards again. Keyed by deckId — one run each.
+db.version(4).stores({
+  decks: 'id, name, createdAt, parentId',
+  cards: 'id, deckId, due, starred, *tags, [deckId+due], [deckId+starred]',
+  reviews: 'id, cardId, deckId, reviewedAt',
+  cram: 'deckId, updatedAt',
 });
 
 export function newId(): string {

@@ -1,6 +1,6 @@
 import type { UpdateSpec } from 'dexie';
 import { db, newId } from './db';
-import type { Card, Deck, FsrsState, Rating, ReviewLog } from './schema';
+import type { Card, CramSession, Deck, FsrsState, Rating, ReviewLog } from './schema';
 import { newCardState } from '../lib/scheduler';
 import { byName } from '../lib/order';
 
@@ -308,6 +308,25 @@ export async function logCramAnswer(
   });
 }
 
+/** Stores (or replaces) the deck's in-flight cram run. */
+export async function saveCramSession(session: CramSession): Promise<void> {
+  await db.cram.put(session);
+}
+
+export async function getCramSession(deckId: string): Promise<CramSession | undefined> {
+  return db.cram.get(deckId);
+}
+
+export async function clearCramSession(deckId: string): Promise<void> {
+  await db.cram.delete(deckId);
+}
+
+/** Deck id -> unfinished run, for showing "resume" on the deck list. */
+export async function cramSessions(): Promise<Map<string, CramSession>> {
+  const all = await db.cram.toArray();
+  return new Map(all.map((s) => [s.deckId, s]));
+}
+
 export async function toggleStar(cardId: string): Promise<0 | 1> {
   const card = await db.cards.get(cardId);
   if (!card) return 0;
@@ -328,9 +347,10 @@ export async function restoreCard(cardId: string): Promise<void> {
 /** Deletes a deck and everything under it. */
 export async function deleteDeck(deckId: string): Promise<void> {
   const ids = await subtreeIds(deckId);
-  await db.transaction('rw', db.decks, db.cards, db.reviews, async () => {
+  await db.transaction('rw', db.decks, db.cards, db.reviews, db.cram, async () => {
     await db.cards.where('deckId').anyOf(ids).delete();
     await db.reviews.where('deckId').anyOf(ids).delete();
+    await db.cram.bulkDelete(ids);
     await db.decks.bulkDelete(ids);
   });
 }

@@ -6,7 +6,7 @@
  * so a card leaves the batch once you get it, and a card you missed has to be
  * answered correctly twice before it goes — once to fix it, once to prove it.
  */
-import type { Card } from '../db/schema';
+import type { Card, CramSession } from '../db/schema';
 
 /** Cards drilled together before the next set is unlocked. */
 export const BATCH_SIZE = 6;
@@ -56,6 +56,70 @@ export function answer(queue: CramItem[], correct: boolean): CramItem[] {
 
   const at = Math.min(REQUEUE_GAP, rest.length);
   return [...rest.slice(0, at), next, ...rest.slice(at)];
+}
+
+/** Everything a cram run needs to carry on where it left off. */
+export interface CramProgress {
+  batches: Card[][];
+  batchIndex: number;
+  queue: CramItem[];
+  resting: boolean;
+  missed: Card[];
+  answered: number;
+}
+
+/** True once every batch has been cleared — there is nothing left to resume. */
+export function isFinished(progress: CramProgress): boolean {
+  const { batches, batchIndex, resting, queue } = progress;
+  if (batchIndex >= batches.length) return true;
+  return (resting || queue.length === 0) && batchIndex === batches.length - 1;
+}
+
+/** Progress reduced to ids, which is what gets stored. */
+export function snapshotOf(deckId: string, p: CramProgress, at = Date.now()): CramSession {
+  return {
+    deckId,
+    order: p.batches.flat().map((c) => c.id),
+    batchIndex: p.batchIndex,
+    queue: p.queue.map((i) => ({ cardId: i.card.id, remaining: i.remaining, missed: i.missed })),
+    resting: p.resting,
+    missedIds: p.missed.map((c) => c.id),
+    answered: p.answered,
+    updatedAt: at,
+  };
+}
+
+/**
+ * Rebuilds a stored run against the deck as it is now. Cards deleted since the
+ * run started simply drop out. Returns null when there is nothing worth
+ * resuming — an empty or already-finished run — so the caller starts fresh.
+ */
+export function restoreSession(session: CramSession, cards: Card[]): CramProgress | null {
+  const byId = new Map(cards.map((c) => [c.id, c] as const));
+
+  const order = session.order.map((id) => byId.get(id)).filter((c): c is Card => c != null);
+  if (order.length === 0) return null;
+
+  const batches = makeBatches(order);
+  const batchIndex = session.batchIndex;
+  if (batchIndex < 0 || batchIndex >= batches.length) return null;
+
+  const queue = session.queue.flatMap((i) => {
+    const card = byId.get(i.cardId);
+    return card ? [{ card, remaining: i.remaining, missed: i.missed }] : [];
+  });
+
+  const progress: CramProgress = {
+    batches,
+    batchIndex,
+    // An empty queue means that batch was cleared: pick up at its checkpoint.
+    queue,
+    resting: session.resting || queue.length === 0,
+    missed: session.missedIds.map((id) => byId.get(id)).filter((c): c is Card => c != null),
+    answered: session.answered,
+  };
+
+  return isFinished(progress) ? null : progress;
 }
 
 /** Fisher–Yates, so repeat sessions don't drill the deck in the same order. */

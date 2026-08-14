@@ -4,8 +4,29 @@ import CardActions from '../components/CardActions';
 import CardFace from '../components/CardFace';
 import UndoToast from '../components/UndoToast';
 import type { Card, Deck } from '../db/schema';
-import { getDeck, getDueCards, logCramAnswer, restoreCard, softDeleteCard, toggleStar } from '../db/repo';
-import { answer, makeBatches, shuffle, startBatch, type CramItem, BATCH_SIZE } from '../lib/cram';
+import {
+  clearCramSession,
+  getCramSession,
+  getDeck,
+  getDueCards,
+  logCramAnswer,
+  restoreCard,
+  saveCramSession,
+  softDeleteCard,
+  toggleStar,
+} from '../db/repo';
+import {
+  answer,
+  isFinished,
+  makeBatches,
+  restoreSession,
+  shuffle,
+  snapshotOf,
+  startBatch,
+  type CramItem,
+  type CramProgress,
+  BATCH_SIZE,
+} from '../lib/cram';
 
 /**
  * Exam-week drilling. Ignores due dates entirely, walks the deck in batches of
@@ -29,33 +50,64 @@ export default function Cram() {
   const [answered, setAnswered] = useState(0);
   const [deleted, setDeleted] = useState<Card | null>(null);
 
-  const load = useCallback(async (cards: Card[]) => {
-    const groups = makeBatches(shuffle(cards));
-    setBatches(groups);
-    setBatchIndex(0);
-    setQueue(groups.length ? startBatch(groups[0]) : []);
-    setResting(false);
-    setMissed([]);
-    setAnswered(0);
+  const apply = useCallback((p: CramProgress) => {
+    setBatches(p.batches);
+    setBatchIndex(p.batchIndex);
+    setQueue(p.queue);
+    setResting(p.resting);
+    setMissed(p.missed);
+    setAnswered(p.answered);
     setRevealed(false);
+    setRevealedAt(null);
   }, []);
+
+  /** Starts a fresh run over the given cards, discarding any saved progress. */
+  const load = useCallback(
+    (cards: Card[]) => {
+      const groups = makeBatches(shuffle(cards));
+      apply({
+        batches: groups,
+        batchIndex: 0,
+        queue: groups.length ? startBatch(groups[0]) : [],
+        resting: false,
+        missed: [],
+        answered: 0,
+      });
+    },
+    [apply],
+  );
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       // studyAhead ignores due dates, which is exactly the cram selection.
-      const [d, cards] = await Promise.all([
+      const [d, cards, saved] = await Promise.all([
         getDeck(deckId),
         getDueCards(deckId, { studyAhead: true }),
+        getCramSession(deckId),
       ]);
       if (cancelled) return;
       setDeck(d ?? null);
-      void load(cards);
+      // Pick up an unfinished run rather than re-drilling the sets you cleared.
+      const resumed = saved ? restoreSession(saved, cards) : null;
+      if (resumed) apply(resumed);
+      else load(cards);
     })();
     return () => {
       cancelled = true;
     };
-  }, [deckId, load]);
+  }, [deckId, apply, load]);
+
+  /**
+   * One write per answer keeps the run recoverable if the tab closes; finishing
+   * clears it so the next visit starts a new drill.
+   */
+  useEffect(() => {
+    if (!batches || !deckId) return;
+    const progress: CramProgress = { batches, batchIndex, queue, resting, missed, answered };
+    if (isFinished(progress)) void clearCramSession(deckId);
+    else void saveCramSession(snapshotOf(deckId, progress));
+  }, [deckId, batches, batchIndex, queue, resting, missed, answered]);
 
   const current = queue[0]?.card ?? null;
   const totalCards = useMemo(
@@ -210,8 +262,8 @@ export default function Cram() {
           total={totalCards}
           answered={answered}
           missed={missed}
-          onRedoMissed={() => void load(missed)}
-          onRestart={() => void load(batches.flat())}
+          onRedoMissed={() => load(missed)}
+          onRestart={() => load(batches.flat())}
           onLeave={() => navigate('/')}
         />
       ) : resting ? (
@@ -230,12 +282,16 @@ export default function Cram() {
             Next {Math.min(BATCH_SIZE, batches[batchIndex + 1]?.length ?? 0)} cards
             <span className="keyboard-only ml-1 text-violet-200">space</span>
           </button>
-          <button
-            onClick={() => navigate('/')}
-            className="text-sm text-ink-600 hover:underline dark:text-ink-400"
-          >
-            Stop here
-          </button>
+          {/* Leaving is safe: the sets you cleared are saved, and coming back
+              picks up right here. */}
+          <div className="flex gap-4 text-sm text-ink-600 dark:text-ink-400">
+            <button onClick={() => navigate('/')} className="hover:underline">
+              Stop here — progress is saved
+            </button>
+            <button onClick={() => load(batches.flat())} className="hover:underline">
+              Start over
+            </button>
+          </div>
         </div>
       ) : current ? (
         <div className="flex flex-1 flex-col gap-4 sm:gap-5">

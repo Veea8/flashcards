@@ -65,6 +65,27 @@ export interface ReviewLog {
   mode?: 'cram';
 }
 
+/**
+ * An unfinished cram run, one per deck. Cram progress lives outside the cards
+ * (it deliberately writes no scheduling state), so leaving the screen would
+ * otherwise throw away the sets you already cleared.
+ */
+export interface CramSession {
+  /** Primary key — a deck has at most one run in flight. */
+  deckId: string;
+  /** Every card in the drill, in the shuffled order the batches came from. */
+  order: string[];
+  /** Which batch is in progress. */
+  batchIndex: number;
+  /** The live batch queue, head first. */
+  queue: { cardId: string; remaining: number; missed: boolean }[];
+  /** True at a between-batches checkpoint. */
+  resting: boolean;
+  missedIds: string[];
+  answered: number;
+  updatedAt: number;
+}
+
 export const RATING_LABELS: Record<Rating, string> = {
   1: 'Again',
   2: 'Hard',

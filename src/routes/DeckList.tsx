@@ -2,11 +2,16 @@ import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Link, useNavigate } from 'react-router';
 import Dropzone from '../components/Dropzone';
-import { deleteDeck, listDeckTree, type DeckNode } from '../db/repo';
+import { cramSessions, deleteDeck, listDeckTree, type DeckNode } from '../db/repo';
+import type { CramSession } from '../db/schema';
+import { BATCH_SIZE } from '../lib/cram';
 
 export default function DeckList() {
   const navigate = useNavigate();
-  const decks = useLiveQuery(() => listDeckTree(), [], undefined);
+  const data = useLiveQuery(async () => {
+    const [decks, runs] = await Promise.all([listDeckTree(), cramSessions()]);
+    return { decks, runs };
+  }, [], undefined);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   function handleFile(name: string, text: string) {
@@ -24,7 +29,8 @@ export default function DeckList() {
     });
   }
 
-  if (!decks) return null;
+  if (!data) return null;
+  const { decks, runs } = data;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-10">
@@ -54,6 +60,7 @@ export default function DeckList() {
                   deck={deck}
                   depth={0}
                   collapsed={collapsed}
+                  runs={runs}
                   onToggle={toggle}
                   onDelete={(d) => {
                     const extra = d.children.length
@@ -79,16 +86,20 @@ interface RowProps {
   deck: DeckNode;
   depth: number;
   collapsed: Set<string>;
+  /** Unfinished cram runs by deck id, so the button can offer to resume. */
+  runs: Map<string, CramSession>;
   onToggle: (id: string) => void;
   onDelete: (deck: DeckNode) => void;
 }
 
-function DeckRow({ deck, depth, collapsed, onToggle, onDelete }: RowProps) {
+function DeckRow({ deck, depth, collapsed, runs, onToggle, onDelete }: RowProps) {
   const isOpen = !collapsed.has(deck.id);
   const hasChildren = deck.children.length > 0;
   // A parent's numbers include everything beneath it, which is the count that
   // actually tells you how much work is waiting.
   const counts = deck.rollup;
+  const run = runs.get(deck.id);
+  const sets = run ? Math.ceil(run.order.length / BATCH_SIZE) : 0;
 
   return (
     <>
@@ -160,9 +171,13 @@ function DeckRow({ deck, depth, collapsed, onToggle, onDelete }: RowProps) {
             <Link
               to={`/cram/${deck.id}`}
               className="flex-1 rounded-lg border border-violet-300 px-4 py-2.5 text-center text-sm text-violet-700 hover:bg-violet-50 sm:flex-none sm:py-2 dark:border-violet-900 dark:text-violet-300 dark:hover:bg-violet-950/50"
-              title="Drill this deck in sets of six, ignoring due dates"
+              title={
+                run
+                  ? `Pick up at set ${run.batchIndex + 1} of ${sets}`
+                  : 'Drill this deck in sets of six, ignoring due dates'
+              }
             >
-              Cram
+              {run ? `Cram · set ${run.batchIndex + 1}/${sets}` : 'Cram'}
             </Link>
           )}
           {counts.starred > 0 && (
@@ -193,6 +208,7 @@ function DeckRow({ deck, depth, collapsed, onToggle, onDelete }: RowProps) {
                 deck={child}
                 depth={depth + 1}
                 collapsed={collapsed}
+                runs={runs}
                 onToggle={onToggle}
                 onDelete={onDelete}
               />

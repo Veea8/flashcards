@@ -96,6 +96,11 @@ the next six are locked until every card in the current set has been answered
 correctly, and a card you miss needs two clean passes before it graduates. Answers
 are Got it / Missed it — there is no interval to grade.
 
+A run is saved after every answer, so leaving mid-deck costs nothing: the deck list
+shows which set you're on, and opening Cram again picks up exactly there rather than
+re-drilling the sets you already cleared. Finishing the deck clears the run, and the
+checkpoint screen has a **Start over** if you want a fresh shuffle.
+
 Cram never writes scheduling state, so a week of drilling leaves the long-term
 schedule untouched. Its answers are logged, so they still count toward your streak,
 time studied and activity heatmap, but they're excluded from the retention figure —

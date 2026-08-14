@@ -10,11 +10,14 @@ import {
   addCardsToDeck,
   applyReview,
   browseCards,
+  clearCramSession,
+  cramSessions,
   createDeckFromCards,
   deleteDeck,
   fsrsStateOf,
   getAllLiveCards,
   getAllReviews,
+  getCramSession,
   getDueCards,
   getNextDueAt,
   getReviewsSince,
@@ -23,6 +26,7 @@ import {
   logCramAnswer,
   restoreCard,
   revertReview,
+  saveCramSession,
   softDeleteCard,
   subtreeIds,
   toggleStar,
@@ -405,5 +409,57 @@ describe('subdecks', () => {
     expect(after.children.map((c) => c.name)).toEqual(['Probability']);
     expect(after.rollup.total).toBe(2);
     expect(await getDueCards(rootId)).toHaveLength(2);
+  });
+});
+
+describe('cram sessions', () => {
+  const session = (deckId: string, cardIds: string[]) => ({
+    deckId,
+    order: cardIds,
+    batchIndex: 1,
+    queue: cardIds.slice(0, 1).map((cardId) => ({ cardId, remaining: 1, missed: false })),
+    resting: false,
+    missedIds: [],
+    answered: 6,
+    updatedAt: Date.now(),
+  });
+
+  it('stores one in-flight run per deck and replaces it on save', async () => {
+    const deckId = await createDeckFromCards('French', PAIRS);
+    const cards = await getDueCards(deckId);
+
+    await saveCramSession(session(deckId, cards.map((c) => c.id)));
+    expect((await getCramSession(deckId))?.batchIndex).toBe(1);
+
+    await saveCramSession({ ...session(deckId, cards.map((c) => c.id)), batchIndex: 2 });
+    expect(await db.cram.count()).toBe(1);
+    expect((await getCramSession(deckId))?.batchIndex).toBe(2);
+
+    await clearCramSession(deckId);
+    expect(await getCramSession(deckId)).toBeUndefined();
+  });
+
+  it('lists runs by deck, for the resume label on the deck list', async () => {
+    const a = await createDeckFromCards('A', PAIRS);
+    const b = await createDeckFromCards('B', PAIRS);
+    await saveCramSession(session(a, []));
+
+    const runs = await cramSessions();
+    expect(runs.has(a)).toBe(true);
+    expect(runs.has(b)).toBe(false);
+  });
+
+  it('takes the run with the deck when the deck is deleted', async () => {
+    const rootId = await importDeckTree('AW', [
+      { path: ['Graphs'], cards: [{ front: 'g1', back: 'c' }] },
+    ]);
+    const [root] = await listDeckTree();
+    const child = root.children[0];
+
+    await saveCramSession(session(rootId, []));
+    await saveCramSession(session(child.id, []));
+    await deleteDeck(rootId);
+
+    expect(await db.cram.count()).toBe(0);
   });
 });

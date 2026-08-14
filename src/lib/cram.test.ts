@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import type { Card } from '../db/schema';
-import { answer, makeBatches, shuffle, startBatch, BATCH_SIZE } from './cram';
+import {
+  answer,
+  isFinished,
+  makeBatches,
+  restoreSession,
+  shuffle,
+  snapshotOf,
+  startBatch,
+  BATCH_SIZE,
+  type CramProgress,
+} from './cram';
 
 function card(front: string): Card {
   return {
@@ -88,6 +98,109 @@ describe('answering', () => {
 
   it('is a no-op on an empty queue', () => {
     expect(answer([], true)).toEqual([]);
+  });
+});
+
+describe('saving and resuming', () => {
+  /** A 14-card run with the first set cleared and the second under way. */
+  function midRun(): { cards: Card[]; progress: CramProgress } {
+    const cards = deck(14);
+    const batches = makeBatches(cards);
+    return {
+      cards,
+      progress: {
+        batches,
+        batchIndex: 1,
+        queue: answer(startBatch(batches[1]), false),
+        resting: false,
+        missed: [cards[6]],
+        answered: 7,
+      },
+    };
+  }
+
+  it('round-trips a run through the stored snapshot', () => {
+    const { cards, progress } = midRun();
+    const restored = restoreSession(snapshotOf('d1', progress), cards);
+
+    expect(restored).not.toBeNull();
+    expect(restored!.batchIndex).toBe(1);
+    expect(restored!.answered).toBe(7);
+    expect(restored!.missed.map((c) => c.front)).toEqual(['c7']);
+    expect(restored!.queue.map((i) => i.card.front)).toEqual(
+      progress.queue.map((i) => i.card.front),
+    );
+    expect(restored!.queue[3]).toMatchObject({ remaining: 2, missed: true });
+    // The batches you already cleared are still there, so "set 2 of 3" holds.
+    expect(restored!.batches.map((b) => b.length)).toEqual([6, 6, 2]);
+  });
+
+  it('keeps the shuffled order rather than the deck order', () => {
+    const cards = deck(6);
+    const shuffled = [cards[3], cards[0], cards[5], cards[1], cards[4], cards[2]];
+    const snap = snapshotOf('d1', {
+      batches: makeBatches(shuffled),
+      batchIndex: 0,
+      queue: startBatch(shuffled),
+      resting: false,
+      missed: [],
+      answered: 0,
+    });
+
+    const restored = restoreSession(snap, cards);
+    expect(restored!.batches[0].map((c) => c.front)).toEqual(shuffled.map((c) => c.front));
+  });
+
+  it('resumes at the checkpoint between two sets', () => {
+    const cards = deck(14);
+    const batches = makeBatches(cards);
+    const snap = snapshotOf('d1', {
+      batches,
+      batchIndex: 0,
+      queue: [],
+      resting: true,
+      missed: [],
+      answered: 6,
+    });
+
+    const restored = restoreSession(snap, cards)!;
+    expect(restored.resting).toBe(true);
+    expect(restored.batchIndex).toBe(0);
+  });
+
+  it('drops cards deleted since the run started', () => {
+    const { cards, progress } = midRun();
+    const snap = snapshotOf('d1', progress);
+    const left = cards.filter((c) => c.front !== 'c8' && c.front !== 'c14');
+
+    const restored = restoreSession(snap, left)!;
+    expect(restored.queue.some((i) => i.card.front === 'c8')).toBe(false);
+    expect(restored.batches.flat()).toHaveLength(12);
+  });
+
+  it('starts fresh when the saved run is finished or gone', () => {
+    const cards = deck(6);
+    const batches = makeBatches(cards);
+    const done = snapshotOf('d1', {
+      batches,
+      batchIndex: 0,
+      queue: [],
+      resting: true,
+      missed: [],
+      answered: 6,
+    });
+    expect(restoreSession(done, cards)).toBeNull();
+
+    // Every card in the run has since been deleted.
+    expect(restoreSession(snapshotOf('d1', { ...midRun().progress }), [])).toBeNull();
+  });
+
+  it('knows a run is finished only on the last set', () => {
+    const batches = makeBatches(deck(14));
+    const base = { batches, queue: [], resting: true, missed: [], answered: 0 };
+    expect(isFinished({ ...base, batchIndex: 1 })).toBe(false);
+    expect(isFinished({ ...base, batchIndex: 2 })).toBe(true);
+    expect(isFinished({ ...base, batches: [], batchIndex: 0 })).toBe(true);
   });
 });
 
