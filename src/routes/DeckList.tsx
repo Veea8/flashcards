@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router';
 import Dropzone from '../components/Dropzone';
 import { cramSessions, deleteDeck, listDeckTree, type DeckNode } from '../db/repo';
 import type { CramSession } from '../db/schema';
-import { isRecentlyCompleted, BATCH_SIZE } from '../lib/cram';
+import { completedLabel, isCompleted, BATCH_SIZE } from '../lib/cram';
 
 export default function DeckList() {
   const navigate = useNavigate();
@@ -101,8 +101,8 @@ function DeckRow({ deck, depth, collapsed, runs, onToggle, onDelete }: RowProps)
   const saved = runs.get(deck.id);
   // A finished run is kept as a record, so it labels the button differently
   // from one that's still waiting to be picked up.
-  const done = saved && isRecentlyCompleted(saved) ? saved : null;
-  const run = saved && !saved.completedAt ? saved : null;
+  const done = saved && isCompleted(saved) ? saved : null;
+  const run = saved && !done ? saved : null;
   const sets = run ? Math.ceil(run.order.length / BATCH_SIZE) : 0;
 
   return (
@@ -179,7 +179,7 @@ function DeckRow({ deck, depth, collapsed, runs, onToggle, onDelete }: RowProps)
                 run
                   ? `Pick up at set ${run.batchIndex + 1} of ${sets}`
                   : done
-                    ? `You drilled all ${done.order.length} cards clean — open to drill them again`
+                    ? `Drilled clean ${completedLabel(done.completedAt!)} — all ${done.order.length} cards`
                     : 'Drill this deck in sets of six, ignoring due dates'
               }
             >

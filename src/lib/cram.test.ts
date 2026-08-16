@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import type { Card } from '../db/schema';
 import {
   answer,
+  completedLabel,
+  isCompleted,
   isFinished,
-  isRecentlyCompleted,
   makeBatches,
   recapOf,
   restoreSession,
@@ -11,7 +12,6 @@ import {
   snapshotOf,
   startBatch,
   BATCH_SIZE,
-  RECAP_WINDOW_MS,
   type CramProgress,
 } from './cram';
 
@@ -228,35 +228,39 @@ describe('finishing a run', () => {
     };
   }
 
-  it('recaps a run you just finished instead of resuming it', () => {
-    const now = Date.now();
-    const { cards, session } = done(now - 60_000);
+  it('recaps a finished run instead of resuming it', () => {
+    const { cards, session } = done(Date.now() - 60_000);
 
     // Nothing to resume — but plenty to say about it.
     expect(restoreSession(session, cards)).toBeNull();
-    const recap = recapOf(session, cards, now)!;
+    const recap = recapOf(session, cards)!;
     expect(recap.total).toBe(12);
     expect(recap.answered).toBe(15);
     expect(recap.missed.map((c) => c.front)).toEqual(['c3', 'c10']);
+    expect(recap.added).toBe(0);
   });
 
-  it('counts only the cards that still exist', () => {
-    const now = Date.now();
-    const { cards, session } = done(now);
-    const left = cards.filter((c) => c.front !== 'c3' && c.front !== 'c5');
+  it('stays finished however long ago it was', () => {
+    const year = 365 * 86_400_000;
+    const { cards, session } = done(Date.now() - year);
 
-    const recap = recapOf(session, left, now)!;
+    expect(isCompleted(session)).toBe(true);
+    expect(recapOf(session, cards)?.total).toBe(12);
+  });
+
+  it('counts only the cards that still exist, and flags ones added since', () => {
+    const { cards, session } = done(Date.now());
+    const now = [...cards.filter((c) => c.front !== 'c3' && c.front !== 'c5'), card('new')];
+
+    const recap = recapOf(session, now)!;
     expect(recap.total).toBe(10);
+    expect(recap.added).toBe(1);
     expect(recap.missed.map((c) => c.front)).toEqual(['c10']);
   });
 
-  it('lets a stale run go, so the next visit is a fresh shuffle', () => {
-    const now = Date.now();
-    const { cards, session } = done(now - RECAP_WINDOW_MS - 1);
-
-    expect(isRecentlyCompleted(session, now)).toBe(false);
-    expect(recapOf(session, cards, now)).toBeNull();
-    expect(RECAP_WINDOW_MS).toBe(24 * 60 * 60 * 1000);
+  it('has nothing to recap once every card in the run is gone', () => {
+    const { session } = done(Date.now());
+    expect(recapOf(session, [])).toBeNull();
   });
 
   it('has nothing to recap while a run is still in flight', () => {
@@ -269,9 +273,20 @@ describe('finishing a run', () => {
       missed: [],
       answered: 6,
     });
-    expect(isRecentlyCompleted(live)).toBe(false);
+    expect(isCompleted(live)).toBe(false);
     expect(recapOf(live, cards)).toBeNull();
     expect(restoreSession(live, cards)).not.toBeNull();
+  });
+
+  it('says how long ago in words, then falls back to a date', () => {
+    const now = new Date('2026-08-16T10:00:00').getTime();
+    const at = (iso: string) => completedLabel(new Date(iso).getTime(), now);
+
+    expect(at('2026-08-16T01:00:00')).toBe('today');
+    expect(at('2026-08-15T23:00:00')).toBe('yesterday');
+    expect(at('2026-08-12T09:00:00')).toBe('4 days ago');
+    // A month out, "43 days ago" stops meaning anything — give the date.
+    expect(at('2026-07-04T09:00:00')).toMatch(/^on /);
   });
 });
 

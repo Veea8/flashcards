@@ -101,10 +101,11 @@ shows which set you're on, and opening Cram again picks up exactly there rather 
 re-drilling the sets you already cleared. The checkpoint screen has a **Start over** if
 you want a fresh shuffle instead.
 
-Finishing the last set doesn't wipe the run — on a two-set deck that would reset you to
-zero the moment you were done. The deck reads **Cram ✓** for the next 24 hours, and
-opening it recaps what you drilled with a **Drill it again** and a shortcut to redo just
-the cards you missed. After a day the record lapses and Cram opens a fresh shuffle.
+Finishing the last set doesn't wipe the run — a deck you cleared stays cleared. The deck
+list reads **Cram ✓** from then on, and opening it says what you drilled and how long ago
+("You finished this deck 6 days ago"), with **Drill it again**, a shortcut to redo just
+the cards you missed, and a note if cards have been imported since. Only starting a new
+run replaces the record.
 
 Cram never writes scheduling state, so a week of drilling leaves the long-term
 schedule untouched. Its answers are logged, so they still count toward your streak,

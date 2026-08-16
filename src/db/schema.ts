@@ -88,8 +88,9 @@ export interface CramSession {
   /**
    * When the last set was cleared. Deleting the run here would wipe a small
    * deck back to zero the moment you finish it, so a finished run is kept as a
-   * record: the deck list can say you're done and the next visit recaps the run
-   * instead of silently reshuffling the cards you just drilled.
+   * record — and kept indefinitely: the deck list says you're done and opening
+   * Cram recaps the run instead of reshuffling cards you already drilled. Only
+   * starting a new run replaces it.
    */
   completedAt?: number;
 }

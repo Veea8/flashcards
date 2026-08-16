@@ -125,15 +125,12 @@ export function restoreSession(session: CramSession, cards: Card[]): CramProgres
 }
 
 /**
- * How long a finished run stays interesting. Inside the window, opening Cram
- * recaps what you just did rather than dumping you into a fresh shuffle; after
- * it, the run is old news and a new drill starts on its own.
+ * A run drilled to the end. Finished runs don't expire: a deck you cleared
+ * stays cleared until you choose to drill it again, so coming back weeks later
+ * still shows what you got through.
  */
-export const RECAP_WINDOW_MS = 24 * 60 * 60 * 1000;
-
-/** A finished run you'd still want to see — the deck list's ✓ and the recap screen. */
-export function isRecentlyCompleted(session: CramSession, now = Date.now()): boolean {
-  return session.completedAt != null && now - session.completedAt < RECAP_WINDOW_MS;
+export function isCompleted(session: CramSession): boolean {
+  return session.completedAt != null;
 }
 
 export interface CramRecap {
@@ -142,21 +139,47 @@ export interface CramRecap {
   total: number;
   answered: number;
   missed: Card[];
+  /** Cards in the deck now that this run never covered — imported since. */
+  added: number;
 }
 
 /**
- * What a just-finished run has to say for itself. Null when the run is still in
- * flight, or old enough that a fresh shuffle is the friendlier thing to do.
+ * What a finished run has to say for itself. Null while a run is still in
+ * flight, or once every card it covered has been deleted — there's nothing left
+ * to have finished.
  */
-export function recapOf(session: CramSession, cards: Card[], now = Date.now()): CramRecap | null {
-  if (!isRecentlyCompleted(session, now)) return null;
+export function recapOf(session: CramSession, cards: Card[]): CramRecap | null {
+  if (!isCompleted(session)) return null;
   const byId = new Map(cards.map((c) => [c.id, c] as const));
+
+  const total = session.order.filter((id) => byId.has(id)).length;
+  if (total === 0) return null;
+
   return {
     completedAt: session.completedAt!,
-    total: session.order.filter((id) => byId.has(id)).length,
+    total,
     answered: session.answered,
     missed: session.missedIds.map((id) => byId.get(id)).filter((c): c is Card => c != null),
+    added: cards.length - total,
   };
+}
+
+/** How long ago a run was finished, for the ✓ tooltip and the recap line. */
+export function completedLabel(at: number, now = Date.now()): string {
+  const startOfDay = (t: number) => new Date(t).setHours(0, 0, 0, 0);
+  const days = Math.round((startOfDay(now) - startOfDay(at)) / 86_400_000);
+
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 30) return `${days} days ago`;
+
+  const d = new Date(at);
+  const sameYear = d.getFullYear() === new Date(now).getFullYear();
+  return `on ${d.toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    ...(sameYear ? {} : { year: 'numeric' }),
+  })}`;
 }
 
 /** Fisher–Yates, so repeat sessions don't drill the deck in the same order. */

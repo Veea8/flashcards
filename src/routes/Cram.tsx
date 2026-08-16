@@ -18,6 +18,7 @@ import {
 } from '../db/repo';
 import {
   answer,
+  completedLabel,
   isFinished,
   makeBatches,
   recapOf,
@@ -245,8 +246,8 @@ export default function Cram() {
     navigate,
   ]);
 
-  // A finished run gets a recap rather than an immediate reshuffle, so coming
-  // back doesn't look like the drill you just did was thrown away.
+  // A finished deck stays finished. Opening Cram shows what you cleared and
+  // when, however long ago it was, rather than quietly reshuffling it.
   if (recap) {
     return (
       <div className="mx-auto flex min-h-[100dvh] max-w-2xl flex-col px-4 py-5 sm:px-6 sm:py-8">
@@ -258,19 +259,26 @@ export default function Cram() {
             ← {deck?.name ?? 'Decks'}
           </button>
           <span className="shrink-0 text-sm whitespace-nowrap text-ink-600 dark:text-ink-400">
-            Cram · done
+            Cram · done ✓
           </span>
         </header>
         <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
           <p className="text-xl font-medium sm:text-2xl">
-            You finished this deck {finishedLabel(recap.completedAt)}.
+            You finished this deck {completedLabel(recap.completedAt)}.
           </p>
           <p className="text-ink-600 dark:text-ink-400">
             {recap.total} card{recap.total === 1 ? '' : 's'} drilled clean · {recap.answered} answer
             {recap.answered === 1 ? '' : 's'}
-            {recap.missed.length > 0 &&
-              ` · ${recap.missed.length} you missed at least once`}
+            {recap.missed.length > 0 && ` · ${recap.missed.length} you missed at least once`}
           </p>
+          {/* Cards imported since don't un-finish the run, but they'd be a
+              surprise if the recap didn't mention them. */}
+          {recap.added > 0 && (
+            <p className="text-sm text-ink-600 dark:text-ink-400">
+              {recap.added} card{recap.added === 1 ? '' : 's'} added to the deck since — drilling
+              again covers {recap.added === 1 ? 'it' : 'them'} too.
+            </p>
+          )}
           <div className="mt-2 flex w-full max-w-xs flex-col gap-3 sm:w-auto sm:max-w-none sm:flex-row">
             {recap.missed.length > 0 && (
               <button
@@ -481,12 +489,6 @@ function Summary({ total, answered, missed, onRedoMissed, onRestart, onLeave }: 
       </div>
     </div>
   );
-}
-
-/** The recap window is 24 hours, so it's today or yesterday and nothing else. */
-function finishedLabel(at: number, now = Date.now()): string {
-  const day = (t: number) => new Date(t).setHours(0, 0, 0, 0);
-  return day(at) === day(now) ? 'today' : 'yesterday';
 }
 
 function truncate(s: string, max = 40): string {
