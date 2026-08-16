@@ -98,8 +98,13 @@ are Got it / Missed it — there is no interval to grade.
 
 A run is saved after every answer, so leaving mid-deck costs nothing: the deck list
 shows which set you're on, and opening Cram again picks up exactly there rather than
-re-drilling the sets you already cleared. Finishing the deck clears the run, and the
-checkpoint screen has a **Start over** if you want a fresh shuffle.
+re-drilling the sets you already cleared. The checkpoint screen has a **Start over** if
+you want a fresh shuffle instead.
+
+Finishing the last set doesn't wipe the run — on a two-set deck that would reset you to
+zero the moment you were done. The deck reads **Cram ✓** for the next 24 hours, and
+opening it recaps what you drilled with a **Drill it again** and a shortcut to redo just
+the cards you missed. After a day the record lapses and Cram opens a fresh shuffle.
 
 Cram never writes scheduling state, so a week of drilling leaves the long-term
 schedule untouched. Its answers are logged, so they still count toward your streak,

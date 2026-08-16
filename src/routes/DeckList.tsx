@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router';
 import Dropzone from '../components/Dropzone';
 import { cramSessions, deleteDeck, listDeckTree, type DeckNode } from '../db/repo';
 import type { CramSession } from '../db/schema';
-import { BATCH_SIZE } from '../lib/cram';
+import { isRecentlyCompleted, BATCH_SIZE } from '../lib/cram';
 
 export default function DeckList() {
   const navigate = useNavigate();
@@ -98,7 +98,11 @@ function DeckRow({ deck, depth, collapsed, runs, onToggle, onDelete }: RowProps)
   // A parent's numbers include everything beneath it, which is the count that
   // actually tells you how much work is waiting.
   const counts = deck.rollup;
-  const run = runs.get(deck.id);
+  const saved = runs.get(deck.id);
+  // A finished run is kept as a record, so it labels the button differently
+  // from one that's still waiting to be picked up.
+  const done = saved && isRecentlyCompleted(saved) ? saved : null;
+  const run = saved && !saved.completedAt ? saved : null;
   const sets = run ? Math.ceil(run.order.length / BATCH_SIZE) : 0;
 
   return (
@@ -174,10 +178,12 @@ function DeckRow({ deck, depth, collapsed, runs, onToggle, onDelete }: RowProps)
               title={
                 run
                   ? `Pick up at set ${run.batchIndex + 1} of ${sets}`
-                  : 'Drill this deck in sets of six, ignoring due dates'
+                  : done
+                    ? `You drilled all ${done.order.length} cards clean — open to drill them again`
+                    : 'Drill this deck in sets of six, ignoring due dates'
               }
             >
-              {run ? `Cram · set ${run.batchIndex + 1}/${sets}` : 'Cram'}
+              {run ? `Cram · set ${run.batchIndex + 1}/${sets}` : done ? 'Cram ✓' : 'Cram'}
             </Link>
           )}
           {counts.starred > 0 && (

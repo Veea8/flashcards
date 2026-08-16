@@ -6,6 +6,7 @@ import UndoToast from '../components/UndoToast';
 import type { Card, Deck } from '../db/schema';
 import {
   clearCramSession,
+  completeCramSession,
   getCramSession,
   getDeck,
   getDueCards,
@@ -19,12 +20,14 @@ import {
   answer,
   isFinished,
   makeBatches,
+  recapOf,
   restoreSession,
   shuffle,
   snapshotOf,
   startBatch,
   type CramItem,
   type CramProgress,
+  type CramRecap,
   BATCH_SIZE,
 } from '../lib/cram';
 
@@ -49,8 +52,13 @@ export default function Cram() {
   const [missed, setMissed] = useState<Card[]>([]);
   const [answered, setAnswered] = useState(0);
   const [deleted, setDeleted] = useState<Card | null>(null);
+  /** Every card in the deck, so "go again" can reshuffle from the recap screen. */
+  const [allCards, setAllCards] = useState<Card[]>([]);
+  /** Set instead of a run when you've just finished this deck. */
+  const [recap, setRecap] = useState<CramRecap | null>(null);
 
   const apply = useCallback((p: CramProgress) => {
+    setRecap(null);
     setBatches(p.batches);
     setBatchIndex(p.batchIndex);
     setQueue(p.queue);
@@ -88,10 +96,16 @@ export default function Cram() {
       ]);
       if (cancelled) return;
       setDeck(d ?? null);
-      // Pick up an unfinished run rather than re-drilling the sets you cleared.
+      setAllCards(cards);
+      // Pick up an unfinished run rather than re-drilling the sets you cleared;
+      // if the last one is finished, say so instead of silently reshuffling.
       const resumed = saved ? restoreSession(saved, cards) : null;
       if (resumed) apply(resumed);
-      else load(cards);
+      else {
+        const done = saved ? recapOf(saved, cards) : null;
+        if (done) setRecap(done);
+        else load(cards);
+      }
     })();
     return () => {
       cancelled = true;
@@ -99,14 +113,17 @@ export default function Cram() {
   }, [deckId, apply, load]);
 
   /**
-   * One write per answer keeps the run recoverable if the tab closes; finishing
-   * clears it so the next visit starts a new drill.
+   * One write per answer keeps the run recoverable if the tab closes. Finishing
+   * marks the run done rather than deleting it — on a two-set deck, deleting
+   * would reset you to zero the instant you completed it.
    */
   useEffect(() => {
     if (!batches || !deckId) return;
     const progress: CramProgress = { batches, batchIndex, queue, resting, missed, answered };
-    if (isFinished(progress)) void clearCramSession(deckId);
-    else void saveCramSession(snapshotOf(deckId, progress));
+    const snapshot = snapshotOf(deckId, progress);
+    if (!isFinished(progress)) void saveCramSession(snapshot);
+    else if (batches.length === 0) void clearCramSession(deckId); // empty deck: nothing to record
+    else void completeCramSession(snapshot);
   }, [deckId, batches, batchIndex, queue, resting, missed, answered]);
 
   const current = queue[0]?.card ?? null;
@@ -227,6 +244,59 @@ export default function Cram() {
     nextBatch,
     navigate,
   ]);
+
+  // A finished run gets a recap rather than an immediate reshuffle, so coming
+  // back doesn't look like the drill you just did was thrown away.
+  if (recap) {
+    return (
+      <div className="mx-auto flex min-h-[100dvh] max-w-2xl flex-col px-4 py-5 sm:px-6 sm:py-8">
+        <header className="mb-4 flex items-center justify-between gap-3 sm:mb-6">
+          <button
+            onClick={() => navigate('/')}
+            className="min-w-0 truncate text-sm text-ink-600 hover:underline dark:text-ink-400"
+          >
+            ← {deck?.name ?? 'Decks'}
+          </button>
+          <span className="shrink-0 text-sm whitespace-nowrap text-ink-600 dark:text-ink-400">
+            Cram · done
+          </span>
+        </header>
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
+          <p className="text-xl font-medium sm:text-2xl">
+            You finished this deck {finishedLabel(recap.completedAt)}.
+          </p>
+          <p className="text-ink-600 dark:text-ink-400">
+            {recap.total} card{recap.total === 1 ? '' : 's'} drilled clean · {recap.answered} answer
+            {recap.answered === 1 ? '' : 's'}
+            {recap.missed.length > 0 &&
+              ` · ${recap.missed.length} you missed at least once`}
+          </p>
+          <div className="mt-2 flex w-full max-w-xs flex-col gap-3 sm:w-auto sm:max-w-none sm:flex-row">
+            {recap.missed.length > 0 && (
+              <button
+                onClick={() => load(recap.missed)}
+                className="rounded-lg bg-violet-600 px-5 py-3 font-medium text-white hover:bg-violet-500 sm:py-2.5"
+              >
+                Redo the {recap.missed.length} I missed
+              </button>
+            )}
+            <button
+              onClick={() => load(allCards)}
+              className="rounded-lg border border-ink-200 px-5 py-3 font-medium hover:bg-ink-100 sm:py-2.5 dark:border-ink-800 dark:hover:bg-ink-900"
+            >
+              Drill it again
+            </button>
+            <button
+              onClick={() => navigate('/')}
+              className="rounded-lg border border-ink-200 px-5 py-3 font-medium hover:bg-ink-100 sm:py-2.5 dark:border-ink-800 dark:hover:bg-ink-900"
+            >
+              Back to decks
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!batches) return null;
 
@@ -411,6 +481,12 @@ function Summary({ total, answered, missed, onRedoMissed, onRestart, onLeave }: 
       </div>
     </div>
   );
+}
+
+/** The recap window is 24 hours, so it's today or yesterday and nothing else. */
+function finishedLabel(at: number, now = Date.now()): string {
+  const day = (t: number) => new Date(t).setHours(0, 0, 0, 0);
+  return day(at) === day(now) ? 'today' : 'yesterday';
 }
 
 function truncate(s: string, max = 40): string {

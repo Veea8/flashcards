@@ -11,6 +11,7 @@ import {
   applyReview,
   browseCards,
   clearCramSession,
+  completeCramSession,
   cramSessions,
   createDeckFromCards,
   deleteDeck,
@@ -181,7 +182,9 @@ describe('cram answers', () => {
 
     const logs = await getAllReviews();
     expect(logs.map((r) => r.mode)).toEqual(['cram', 'cram']);
-    expect(logs.map((r) => r.rating)).toEqual([1, 3]);
+    // Sorted: two answers a millisecond apart can come back in either order,
+    // since reviewedAt is the only sort key.
+    expect(logs.map((r) => r.rating).sort()).toEqual([1, 3]);
     // The deck still has all three cards waiting for a real review.
     expect(await getDueCards(deckId)).toHaveLength(3);
   });
@@ -437,6 +440,20 @@ describe('cram sessions', () => {
 
     await clearCramSession(deckId);
     expect(await getCramSession(deckId)).toBeUndefined();
+  });
+
+  it('keeps a finished run as a record, stamped once', async () => {
+    const deckId = await createDeckFromCards('French', PAIRS);
+    const snapshot = session(deckId, []);
+
+    await completeCramSession(snapshot, 1_000);
+    // Re-rendering the summary must not push the timestamp forward.
+    await completeCramSession(snapshot, 9_000);
+    expect((await getCramSession(deckId))?.completedAt).toBe(1_000);
+
+    // Starting a new run replaces the record rather than inheriting its stamp.
+    await saveCramSession(snapshot);
+    expect((await getCramSession(deckId))?.completedAt).toBeUndefined();
   });
 
   it('lists runs by deck, for the resume label on the deck list', async () => {

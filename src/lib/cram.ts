@@ -95,6 +95,8 @@ export function snapshotOf(deckId: string, p: CramProgress, at = Date.now()): Cr
  * resuming — an empty or already-finished run — so the caller starts fresh.
  */
 export function restoreSession(session: CramSession, cards: Card[]): CramProgress | null {
+  // A finished run is a record, not a queue — recapOf reads it instead.
+  if (session.completedAt) return null;
   const byId = new Map(cards.map((c) => [c.id, c] as const));
 
   const order = session.order.map((id) => byId.get(id)).filter((c): c is Card => c != null);
@@ -120,6 +122,41 @@ export function restoreSession(session: CramSession, cards: Card[]): CramProgres
   };
 
   return isFinished(progress) ? null : progress;
+}
+
+/**
+ * How long a finished run stays interesting. Inside the window, opening Cram
+ * recaps what you just did rather than dumping you into a fresh shuffle; after
+ * it, the run is old news and a new drill starts on its own.
+ */
+export const RECAP_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/** A finished run you'd still want to see — the deck list's ✓ and the recap screen. */
+export function isRecentlyCompleted(session: CramSession, now = Date.now()): boolean {
+  return session.completedAt != null && now - session.completedAt < RECAP_WINDOW_MS;
+}
+
+export interface CramRecap {
+  completedAt: number;
+  /** Cards in the finished run that still exist. */
+  total: number;
+  answered: number;
+  missed: Card[];
+}
+
+/**
+ * What a just-finished run has to say for itself. Null when the run is still in
+ * flight, or old enough that a fresh shuffle is the friendlier thing to do.
+ */
+export function recapOf(session: CramSession, cards: Card[], now = Date.now()): CramRecap | null {
+  if (!isRecentlyCompleted(session, now)) return null;
+  const byId = new Map(cards.map((c) => [c.id, c] as const));
+  return {
+    completedAt: session.completedAt!,
+    total: session.order.filter((id) => byId.has(id)).length,
+    answered: session.answered,
+    missed: session.missedIds.map((id) => byId.get(id)).filter((c): c is Card => c != null),
+  };
 }
 
 /** Fisher–Yates, so repeat sessions don't drill the deck in the same order. */

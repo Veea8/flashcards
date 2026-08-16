@@ -3,12 +3,15 @@ import type { Card } from '../db/schema';
 import {
   answer,
   isFinished,
+  isRecentlyCompleted,
   makeBatches,
+  recapOf,
   restoreSession,
   shuffle,
   snapshotOf,
   startBatch,
   BATCH_SIZE,
+  RECAP_WINDOW_MS,
   type CramProgress,
 } from './cram';
 
@@ -201,6 +204,74 @@ describe('saving and resuming', () => {
     expect(isFinished({ ...base, batchIndex: 1 })).toBe(false);
     expect(isFinished({ ...base, batchIndex: 2 })).toBe(true);
     expect(isFinished({ ...base, batches: [], batchIndex: 0 })).toBe(true);
+  });
+});
+
+describe('finishing a run', () => {
+  /** A 12-card deck drilled to the end: both sets clean. */
+  function done(at: number) {
+    const cards = deck(12);
+    const batches = makeBatches(cards);
+    return {
+      cards,
+      session: {
+        ...snapshotOf('d1', {
+          batches,
+          batchIndex: 1,
+          queue: [],
+          resting: true,
+          missed: [cards[2], cards[9]],
+          answered: 15,
+        }),
+        completedAt: at,
+      },
+    };
+  }
+
+  it('recaps a run you just finished instead of resuming it', () => {
+    const now = Date.now();
+    const { cards, session } = done(now - 60_000);
+
+    // Nothing to resume — but plenty to say about it.
+    expect(restoreSession(session, cards)).toBeNull();
+    const recap = recapOf(session, cards, now)!;
+    expect(recap.total).toBe(12);
+    expect(recap.answered).toBe(15);
+    expect(recap.missed.map((c) => c.front)).toEqual(['c3', 'c10']);
+  });
+
+  it('counts only the cards that still exist', () => {
+    const now = Date.now();
+    const { cards, session } = done(now);
+    const left = cards.filter((c) => c.front !== 'c3' && c.front !== 'c5');
+
+    const recap = recapOf(session, left, now)!;
+    expect(recap.total).toBe(10);
+    expect(recap.missed.map((c) => c.front)).toEqual(['c10']);
+  });
+
+  it('lets a stale run go, so the next visit is a fresh shuffle', () => {
+    const now = Date.now();
+    const { cards, session } = done(now - RECAP_WINDOW_MS - 1);
+
+    expect(isRecentlyCompleted(session, now)).toBe(false);
+    expect(recapOf(session, cards, now)).toBeNull();
+    expect(RECAP_WINDOW_MS).toBe(24 * 60 * 60 * 1000);
+  });
+
+  it('has nothing to recap while a run is still in flight', () => {
+    const cards = deck(12);
+    const live = snapshotOf('d1', {
+      batches: makeBatches(cards),
+      batchIndex: 0,
+      queue: [],
+      resting: true,
+      missed: [],
+      answered: 6,
+    });
+    expect(isRecentlyCompleted(live)).toBe(false);
+    expect(recapOf(live, cards)).toBeNull();
+    expect(restoreSession(live, cards)).not.toBeNull();
   });
 });
 

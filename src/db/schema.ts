@@ -66,9 +66,10 @@ export interface ReviewLog {
 }
 
 /**
- * An unfinished cram run, one per deck. Cram progress lives outside the cards
- * (it deliberately writes no scheduling state), so leaving the screen would
- * otherwise throw away the sets you already cleared.
+ * A cram run, one per deck. Cram progress lives outside the cards (it
+ * deliberately writes no scheduling state), so leaving the screen would
+ * otherwise throw away the sets you already cleared. A finished run is kept
+ * rather than deleted — see `completedAt`.
  */
 export interface CramSession {
   /** Primary key — a deck has at most one run in flight. */
@@ -84,6 +85,13 @@ export interface CramSession {
   missedIds: string[];
   answered: number;
   updatedAt: number;
+  /**
+   * When the last set was cleared. Deleting the run here would wipe a small
+   * deck back to zero the moment you finish it, so a finished run is kept as a
+   * record: the deck list can say you're done and the next visit recaps the run
+   * instead of silently reshuffling the cards you just drilled.
+   */
+  completedAt?: number;
 }
 
 export const RATING_LABELS: Record<Rating, string> = {

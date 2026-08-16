@@ -317,6 +317,15 @@ export async function getCramSession(deckId: string): Promise<CramSession | unde
   return db.cram.get(deckId);
 }
 
+/**
+ * Marks the run finished and keeps it. The first completion time wins, so
+ * re-rendering the summary doesn't keep pushing the timestamp forward.
+ */
+export async function completeCramSession(session: CramSession, at = Date.now()): Promise<void> {
+  const existing = await db.cram.get(session.deckId);
+  await db.cram.put({ ...session, completedAt: existing?.completedAt ?? at });
+}
+
 export async function clearCramSession(deckId: string): Promise<void> {
   await db.cram.delete(deckId);
 }
